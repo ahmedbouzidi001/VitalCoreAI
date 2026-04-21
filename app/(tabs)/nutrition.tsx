@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +40,7 @@ export default function NutritionScreen() {
   const { weeklyMealPlan, deficiencies, regenerateMealPlan, profile, isMealLoading } = useHealth();
   const { t, language } = useLanguage();
   const [selectedDay, setSelectedDay] = useState(0);
+  const goToRecipes = useCallback(() => router.push('/recipes'), [router]);
 
   const dayLabels = t('days').split(',');
   const plan = weeklyMealPlan[selectedDay];
@@ -63,7 +64,13 @@ export default function NutritionScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>{t('meal_plan')}</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{t('meal_plan')}</Text>
+            <TouchableOpacity style={styles.recipesNavBtn} onPress={goToRecipes} activeOpacity={0.8}>
+              <MaterialIcons name="public" size={14} color={Colors.gold} />
+              <Text style={styles.recipesNavText}>Recettes mondiales</Text>
+            </TouchableOpacity>
+          </View>
           {deficiencies.length > 0 && (
             <View style={styles.adaptedBadge}>
               <MaterialIcons name="biotech" size={10} color={Colors.primary} />
@@ -213,7 +220,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
   },
+  titleRow: { flex: 1 },
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 4 },
+  recipesNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.goldMuted, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.gold + '44', marginTop: 4 },
+  recipesNavText: { fontSize: 10, color: Colors.gold, fontWeight: FontWeight.semibold },
   adaptedBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primaryMuted, borderRadius: Radius.full,

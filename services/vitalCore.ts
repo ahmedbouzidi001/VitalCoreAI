@@ -50,44 +50,37 @@ async function invokeVitalAI(payload: any): Promise<{ data: any; error: string |
 }
 
 export async function analyzeBiomarkers(
-  biomarkers: any[],
-  profile: any,
-  language: string
+  biomarkers: any[], profile: any, language: string
 ): Promise<{ result: AIAnalysisResult | null; error: string | null }> {
-  const { data, error } = await invokeVitalAI({
-    type: 'biomarker_analysis',
-    biomarkers,
-    profile,
-    language,
-  });
+  const { data, error } = await invokeVitalAI({ type: 'biomarker_analysis', biomarkers, profile, language });
   return { result: data as AIAnalysisResult | null, error };
 }
 
+export async function analyzePDFBiomarkers(
+  pdfBase64: string, language: string
+): Promise<{ result: any | null; error: string | null }> {
+  const { data, error } = await invokeVitalAI({ type: 'pdf_analysis', pdfBase64, language });
+  return { result: data, error };
+}
+
 export async function generateMealPlanDay(
-  biomarkers: any[],
-  profile: any,
-  language: string
+  biomarkers: any[], profile: any, language: string, country: string
 ): Promise<{ result: AIMealPlanResult | null; error: string | null }> {
-  const { data, error } = await invokeVitalAI({
-    type: 'meal_plan',
-    biomarkers,
-    profile,
-    language,
-  });
+  const { data, error } = await invokeVitalAI({ type: 'meal_plan', biomarkers, profile, language, country });
   return { result: data as AIMealPlanResult | null, error };
 }
 
+export async function generateCountryRecipes(
+  countryCode: string, category: string, language: string, profile: any
+): Promise<{ result: any[] | null; error: string | null }> {
+  const { data, error } = await invokeVitalAI({ type: 'country_recipes', countryCode, category, language, profile });
+  return { result: data, error };
+}
+
 export async function generateWorkoutSession(
-  profile: any,
-  workoutType: string,
-  language: string
+  profile: any, workoutType: string, language: string, splitType?: string
 ): Promise<{ result: AIWorkoutResult | null; error: string | null }> {
-  const { data, error } = await invokeVitalAI({
-    type: 'training_plan',
-    profile,
-    workout_type: workoutType,
-    language,
-  });
+  const { data, error } = await invokeVitalAI({ type: 'training_plan', profile, workout_type: workoutType, language, split_type: splitType });
   return { result: data as AIWorkoutResult | null, error };
 }
 
@@ -121,9 +114,7 @@ export async function saveBiomarker(userId: string, marker: any): Promise<string
 
 export async function loadBiomarkers(userId: string): Promise<{ data: any[]; error: string | null }> {
   const { data, error } = await supabase
-    .from('biomarkers')
-    .select('*')
-    .eq('user_id', userId)
+    .from('biomarkers').select('*').eq('user_id', userId)
     .order('created_at', { ascending: false });
   return { data: data || [], error: error?.message || null };
 }
@@ -131,12 +122,10 @@ export async function loadBiomarkers(userId: string): Promise<{ data: any[]; err
 // ---- Daily stats persistence ----
 export async function saveDailyStats(userId: string, stats: any): Promise<string | null> {
   const today = new Date().toISOString().split('T')[0];
-  const { error } = await supabase.from('daily_stats').upsert({
-    user_id: userId,
-    date: today,
-    ...stats,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,date' });
+  const { error } = await supabase.from('daily_stats').upsert(
+    { user_id: userId, date: today, ...stats, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,date' }
+  );
   return error?.message || null;
 }
 
@@ -146,14 +135,51 @@ export async function loadTodayStats(userId: string): Promise<{ data: any; error
   return { data, error: error?.message || null };
 }
 
+// ---- Weight history ----
+export async function saveWeightEntry(userId: string, weight: number): Promise<string | null> {
+  const { error } = await supabase.from('weight_history').insert({
+    user_id: userId,
+    weight,
+    date: new Date().toISOString().split('T')[0],
+  });
+  return error?.message || null;
+}
+
+export async function loadWeightHistory(userId: string, days = 30): Promise<{ data: any[]; error: string | null }> {
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - days);
+  const { data, error } = await supabase.from('weight_history').select('*')
+    .eq('user_id', userId).gte('date', fromDate.toISOString().split('T')[0])
+    .order('date', { ascending: true });
+  return { data: data || [], error: error?.message || null };
+}
+
+// ---- Health score history ----
+export async function saveHealthScore(userId: string, score: number): Promise<string | null> {
+  const today = new Date().toISOString().split('T')[0];
+  const { error } = await supabase.from('health_score_history').upsert(
+    { user_id: userId, score, date: today },
+    { onConflict: 'user_id,date' }
+  );
+  return error?.message || null;
+}
+
+export async function loadHealthScoreHistory(userId: string, days = 30): Promise<{ data: any[]; error: string | null }> {
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - days);
+  const { data, error } = await supabase.from('health_score_history').select('*')
+    .eq('user_id', userId).gte('date', fromDate.toISOString().split('T')[0])
+    .order('date', { ascending: true });
+  return { data: data || [], error: error?.message || null };
+}
+
 // ---- Meal plan persistence ----
 export async function saveMealPlan(userId: string, planData: any[]): Promise<string | null> {
   const weekStart = getWeekStart();
-  const { error } = await supabase.from('meal_plans').upsert({
-    user_id: userId,
-    week_start: weekStart,
-    plan_data: planData,
-  }, { onConflict: 'user_id,week_start' });
+  const { error } = await supabase.from('meal_plans').upsert(
+    { user_id: userId, week_start: weekStart, plan_data: planData },
+    { onConflict: 'user_id,week_start' }
+  );
   return error?.message || null;
 }
 
@@ -171,30 +197,24 @@ function getWeekStart(): string {
   return monday.toISOString().split('T')[0];
 }
 
-// ---- Workouts persistence ----
+// ---- Workouts ----
 export async function saveWorkout(userId: string, workout: any): Promise<string | null> {
   const { error } = await supabase.from('workouts').insert({
-    user_id: userId,
-    date: new Date().toISOString().split('T')[0],
-    ...workout,
+    user_id: userId, date: new Date().toISOString().split('T')[0], ...workout,
   });
   return error?.message || null;
 }
 
 export async function loadRecentWorkouts(userId: string, limit = 7): Promise<{ data: any[]; error: string | null }> {
-  const { data, error } = await supabase.from('workouts').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(limit);
+  const { data, error } = await supabase.from('workouts').select('*')
+    .eq('user_id', userId).order('created_at', { ascending: false }).limit(limit);
   return { data: data || [], error: error?.message || null };
 }
 
 // ---- Last AI analysis ----
 export async function loadLastAnalysis(userId: string): Promise<{ data: any; error: string | null }> {
   const { data, error } = await supabase
-    .from('ai_analyses')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('type', 'biomarker_analysis')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    .from('ai_analyses').select('*').eq('user_id', userId).eq('type', 'biomarker_analysis')
+    .order('created_at', { ascending: false }).limit(1).single();
   return { data: data?.result, error: error?.message || null };
 }

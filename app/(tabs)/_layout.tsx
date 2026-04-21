@@ -1,32 +1,30 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import React from 'react';
 import { Tabs } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
-import { useLanguage } from '@/hooks/useLanguage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
 
-export default function TabLayout() {
+export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-
-  const tabBarStyle = {
-    height: Platform.select({ ios: insets.bottom + 64, android: insets.bottom + 64, default: 70 }),
-    paddingTop: 10,
-    paddingBottom: Platform.select({ ios: insets.bottom + 10, android: insets.bottom + 10, default: 10 }),
-    paddingHorizontal: 8,
-    backgroundColor: Colors.tabBar,
-    borderTopWidth: 1,
-    borderTopColor: Colors.tabBorder,
-  };
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle,
+        tabBarStyle: {
+          backgroundColor: Colors.tabBar,
+          borderTopColor: Colors.tabBorder,
+          borderTopWidth: 1,
+          height: Platform.select({ ios: insets.bottom + 60, android: 60, default: 64 }),
+          paddingBottom: Platform.select({ ios: insets.bottom + 4, android: 4, default: 8 }),
+          paddingTop: 8,
+        },
         tabBarActiveTintColor: Colors.tabActive,
         tabBarInactiveTintColor: Colors.tabInactive,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
       }}
     >
       <Tabs.Screen
@@ -40,7 +38,7 @@ export default function TabLayout() {
         name="nutrition"
         options={{
           title: t('tab_nutrition'),
-          tabBarIcon: ({ color, size }) => <MaterialIcons name="restaurant" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="restaurant-menu" size={size} color={color} />,
         }}
       />
       <Tabs.Screen

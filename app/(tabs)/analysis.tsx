@@ -1,10 +1,72 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar,
+  TextInput, ActivityIndicator, Dimensions,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useHealth, BiologicalMarker } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+
+const { width } = Dimensions.get('window');
+
+// Simple SVG-free line chart using React Native Views
+function MiniLineChart({ data, color, height = 60 }: { data: number[]; color: string; height?: number }) {
+  if (!data || data.length < 2) return null;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) => ({
+    x: (i / (data.length - 1)) * (width - 80),
+    y: height - ((v - min) / range) * (height - 8),
+  }));
+
+  return (
+    <View style={{ height, width: '100%', position: 'relative', marginTop: 4 }}>
+      {points.slice(1).map((pt, i) => {
+        const prev = points[i];
+        const dx = pt.x - prev.x;
+        const dy = pt.y - prev.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+        return (
+          <View
+            key={i}
+            style={{
+              position: 'absolute',
+              left: prev.x,
+              top: prev.y,
+              width: len,
+              height: 2,
+              backgroundColor: color,
+              opacity: 0.7,
+              borderRadius: 1,
+              transform: [{ rotate: `${angle}deg` }, { translateY: -1 }],
+              transformOrigin: '0 50%',
+            }}
+          />
+        );
+      })}
+      {points.map((pt, i) => (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: pt.x - 3,
+            top: pt.y - 3,
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: color,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
 
 function MarkerRow({ marker, t, language }: { marker: BiologicalMarker; t: any; language: string }) {
   const inRange = marker.value >= marker.normalMin && marker.value <= marker.normalMax;
@@ -69,11 +131,10 @@ function MarkerRow({ marker, t, language }: { marker: BiologicalMarker; t: any; 
         <Text style={mStyles.unit}> {marker.unit}</Text>
       </View>
 
-      {/* Range bar */}
       <View style={mStyles.barContainer}>
         <View style={mStyles.barBg}>
-          <View style={[mStyles.normalZone, { left: `${normalStartPct}%`, width: `${normalRangePct}%` }]} />
-          <View style={[mStyles.valueIndicator, { left: `${valueBarPct}%`, backgroundColor: statusColor }]} />
+          <View style={[mStyles.normalZone, { left: `${normalStartPct}%` as any, width: `${normalRangePct}%` as any }]} />
+          <View style={[mStyles.valueIndicator, { left: `${valueBarPct}%` as any, backgroundColor: statusColor }]} />
         </View>
         <View style={mStyles.rangeLabels}>
           <Text style={mStyles.rangeText}>{marker.normalMin}</Text>
@@ -86,9 +147,7 @@ function MarkerRow({ marker, t, language }: { marker: BiologicalMarker; t: any; 
         <View style={mStyles.recBox}>
           <View style={mStyles.recHeader}>
             <MaterialIcons name="science" size={14} color={Colors.primary} />
-            <Text style={mStyles.recLabel}>
-              {language === 'ar' ? 'توصية علمية' : 'Recommandation EBM'}
-            </Text>
+            <Text style={mStyles.recLabel}>{language === 'ar' ? 'توصية علمية' : 'Recommandation EBM'}</Text>
           </View>
           <Text style={mStyles.recText}>{recText}</Text>
           {rec && <Text style={mStyles.source}>📚 {rec.source}</Text>}
@@ -99,11 +158,7 @@ function MarkerRow({ marker, t, language }: { marker: BiologicalMarker; t: any; 
 }
 
 const mStyles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface, borderRadius: Radius.lg,
-    padding: Spacing.md, marginBottom: Spacing.sm,
-    borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  card: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
   top: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 },
   nameWrap: { flex: 1 },
   name: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
@@ -120,11 +175,7 @@ const mStyles = StyleSheet.create({
   rangeLabels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   rangeText: { fontSize: 10, color: Colors.textMuted },
   rangeCenter: { fontSize: 10, color: Colors.textMuted },
-  recBox: {
-    backgroundColor: Colors.primaryMuted, borderRadius: Radius.sm,
-    padding: Spacing.sm, marginTop: 8,
-    borderWidth: 1, borderColor: Colors.primary + '33',
-  },
+  recBox: { backgroundColor: Colors.primaryMuted, borderRadius: Radius.sm, padding: Spacing.sm, marginTop: 8, borderWidth: 1, borderColor: Colors.primary + '33' },
   recHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   recLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.primary },
   recText: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
@@ -133,7 +184,7 @@ const mStyles = StyleSheet.create({
 
 export default function AnalysisScreen() {
   const insets = useSafeAreaInsets();
-  const { biomarkers, deficiencies, addBiomarker, runAIAnalysis, aiAnalysis, isAILoading, aiError } = useHealth();
+  const { biomarkers, deficiencies, addBiomarker, runAIAnalysis, aiAnalysis, isAILoading, aiError, importPDFBiomarkers } = useHealth();
   const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<'hormones' | 'vitamins' | 'metabolic'>('hormones');
   const [showInput, setShowInput] = useState(false);
@@ -141,6 +192,17 @@ export default function AnalysisScreen() {
   const [inputValue, setInputValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfResult, setPdfResult] = useState<any>(null);
+  const [showEvolution, setShowEvolution] = useState(false);
+
+  // Mock 30-day history for chart demo
+  const [weightHistory] = useState(() =>
+    Array.from({ length: 30 }, (_, i) => 78 + Math.sin(i * 0.4) * 1.5 + Math.random() * 0.5)
+  );
+  const [scoreHistory] = useState(() =>
+    Array.from({ length: 14 }, (_, i) => 65 + Math.floor(i * 2.5) + Math.floor(Math.random() * 5))
+  );
 
   const tabs: Array<{ key: 'hormones' | 'vitamins' | 'metabolic'; label: string; icon: string }> = [
     { key: 'hormones', label: t('hormones'), icon: 'water-drop' },
@@ -157,16 +219,63 @@ export default function AnalysisScreen() {
     if (marker) {
       const val = parseFloat(inputValue);
       await addBiomarker({ ...marker, value: val, date: new Date().toISOString().split('T')[0] });
-      setSaveSuccess(
-        language === 'ar'
-          ? `تم تحديث ${marker.name} إلى ${val} ${marker.unit}`
-          : `${marker.name} mis à jour : ${val} ${marker.unit}`
+      setSaveSuccess(language === 'ar'
+        ? `تم تحديث ${marker.name} إلى ${val} ${marker.unit}`
+        : `${marker.name} mis à jour : ${val} ${marker.unit}`
       );
       setInputValue('');
       setShowInput(false);
       setTimeout(() => setSaveSuccess(''), 3000);
     }
     setSaving(false);
+  };
+
+  const handleImportPDF = async () => {
+    try {
+      setPdfLoading(true);
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.[0]) {
+        setPdfLoading(false);
+        return;
+      }
+
+      const file = result.assets[0];
+      const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+
+      // Call AI via context
+      const analysis = await importPDFBiomarkers(base64, language);
+      if (analysis) {
+        setPdfResult(analysis);
+      }
+    } catch (e: any) {
+      console.error('PDF import error:', e);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const applyPDFMarkers = async () => {
+    if (!pdfResult?.markers) return;
+    for (const m of pdfResult.markers) {
+      await addBiomarker({
+        id: m.name.toLowerCase().replace(/\s+/g, '_'),
+        name: m.name,
+        nameAr: m.nameAr,
+        category: m.category || 'metabolic',
+        value: m.value,
+        unit: m.unit,
+        normalMin: m.normalMin,
+        normalMax: m.normalMax,
+        date: pdfResult.lab_date || new Date().toISOString().split('T')[0],
+      });
+    }
+    setPdfResult(null);
+    setSaveSuccess(language === 'ar' ? 'تم استيراد التحاليل بنجاح!' : 'Analyses importées avec succès !');
+    setTimeout(() => setSaveSuccess(''), 3000);
   };
 
   return (
@@ -183,9 +292,17 @@ export default function AnalysisScreen() {
               : 'Tous les marqueurs dans la norme'}
           </Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setShowInput(!showInput)} activeOpacity={0.8}>
-          <MaterialIcons name={showInput ? 'close' : 'add'} size={20} color={Colors.textInverse} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.pdfBtn} onPress={handleImportPDF} disabled={pdfLoading} activeOpacity={0.8}>
+            {pdfLoading
+              ? <ActivityIndicator size="small" color={Colors.gold} />
+              : <MaterialIcons name="picture-as-pdf" size={18} color={Colors.gold} />
+            }
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setShowInput(!showInput)} activeOpacity={0.8}>
+            <MaterialIcons name={showInput ? 'close' : 'add'} size={20} color={Colors.textInverse} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Success msg */}
@@ -193,6 +310,31 @@ export default function AnalysisScreen() {
         <View style={styles.successBanner}>
           <MaterialIcons name="check-circle" size={16} color={Colors.success} />
           <Text style={styles.successText}>{saveSuccess}</Text>
+        </View>
+      )}
+
+      {/* PDF Result Panel */}
+      {pdfResult && (
+        <View style={styles.pdfResultPanel}>
+          <View style={styles.pdfResultHeader}>
+            <MaterialIcons name="picture-as-pdf" size={16} color={Colors.gold} />
+            <Text style={styles.pdfResultTitle}>
+              {language === 'ar' ? 'نتائج PDF' : 'Résultats PDF'} — {pdfResult.markers?.length || 0} marqueurs détectés
+            </Text>
+          </View>
+          {pdfResult.summary && <Text style={styles.pdfSummary}>{pdfResult.summary}</Text>}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
+            {(pdfResult.markers || []).slice(0, 6).map((m: any, i: number) => (
+              <View key={i} style={[styles.pdfMarkerChip, { borderColor: m.status === 'critical' ? Colors.danger : m.status === 'low' || m.status === 'high' ? Colors.warning : Colors.success }]}>
+                <Text style={styles.pdfMarkerName}>{m.name}</Text>
+                <Text style={[styles.pdfMarkerValue, { color: m.status === 'optimal' ? Colors.success : Colors.warning }]}>{m.value} {m.unit}</Text>
+              </View>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={styles.applyPDFBtn} onPress={applyPDFMarkers} activeOpacity={0.8}>
+            <MaterialIcons name="save" size={16} color={Colors.textInverse} />
+            <Text style={styles.applyPDFText}>{language === 'ar' ? 'تطبيق النتائج' : 'Appliquer les résultats'}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -205,13 +347,64 @@ export default function AnalysisScreen() {
           </View>
           {aiAnalysis.alerts?.slice(0, 2).map((a, i) => (
             <View key={i} style={styles.alertRow}>
-              <MaterialIcons
-                name="warning-amber" size={12}
-                color={a.status === 'critical' ? Colors.danger : Colors.warning}
-              />
+              <MaterialIcons name="warning-amber" size={12} color={a.status === 'critical' ? Colors.danger : Colors.warning} />
               <Text style={styles.alertText}><Text style={styles.alertMarker}>{a.marker}</Text>: {a.recommendation}</Text>
             </View>
           ))}
+        </View>
+      )}
+
+      {/* Evolution Charts */}
+      <TouchableOpacity style={styles.evolutionToggle} onPress={() => setShowEvolution(p => !p)} activeOpacity={0.8}>
+        <MaterialIcons name={showEvolution ? 'keyboard-arrow-up' : 'show-chart'} size={16} color={Colors.primary} />
+        <Text style={styles.evolutionToggleText}>{showEvolution ? 'Masquer' : 'Graphiques d\'évolution'}</Text>
+      </TouchableOpacity>
+
+      {showEvolution && (
+        <View style={styles.evolutionPanel}>
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>📉 Évolution du Poids (30 jours)</Text>
+            <View style={styles.chartStats}>
+              <Text style={styles.chartStat}>Actuel: {weightHistory[weightHistory.length - 1].toFixed(1)} kg</Text>
+              <Text style={[styles.chartStat, { color: Colors.success }]}>
+                {weightHistory[0] > weightHistory[weightHistory.length - 1] ? '↓' : '↑'}
+                {Math.abs(weightHistory[0] - weightHistory[weightHistory.length - 1]).toFixed(1)} kg
+              </Text>
+            </View>
+            <MiniLineChart data={weightHistory} color={Colors.primary} height={80} />
+          </View>
+
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>💚 Score de Santé (14 jours)</Text>
+            <View style={styles.chartStats}>
+              <Text style={styles.chartStat}>Actuel: {scoreHistory[scoreHistory.length - 1]}/100</Text>
+              <Text style={[styles.chartStat, { color: Colors.success }]}>
+                +{scoreHistory[scoreHistory.length - 1] - scoreHistory[0]} pts
+              </Text>
+            </View>
+            <MiniLineChart data={scoreHistory} color={Colors.success} height={60} />
+          </View>
+
+          {/* Biomarker trend */}
+          <View style={styles.chartCard}>
+            <Text style={styles.chartTitle}>🔬 Tendance Biomarqueurs</Text>
+            <View style={styles.bioTrendRow}>
+              {deficiencies.slice(0, 3).map(d => (
+                <View key={d.id} style={styles.bioTrendItem}>
+                  <Text style={styles.bioTrendName}>{d.name.split(' ')[0]}</Text>
+                  <Text style={[styles.bioTrendVal, { color: Colors.warning }]}>{d.value} {d.unit}</Text>
+                  <Text style={styles.bioTrendNorm}>Norme: {d.normalMin}</Text>
+                </View>
+              ))}
+              {biomarkers.filter(b => b.value >= b.normalMin && b.value <= b.normalMax).slice(0, 2).map(b => (
+                <View key={b.id} style={styles.bioTrendItem}>
+                  <Text style={styles.bioTrendName}>{b.name.split(' ')[0]}</Text>
+                  <Text style={[styles.bioTrendVal, { color: Colors.success }]}>{b.value} {b.unit}</Text>
+                  <Text style={styles.bioTrendNorm}>✓ Optimal</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
       )}
 
@@ -226,9 +419,7 @@ export default function AnalysisScreen() {
                 style={[styles.markerChip, selectedMarkerId === m.id && styles.markerChipActive]}
                 onPress={() => setSelectedMarkerId(m.id)}
               >
-                <Text style={[styles.markerChipText, selectedMarkerId === m.id && styles.markerChipTextActive]}>
-                  {m.name}
-                </Text>
+                <Text style={[styles.markerChipText, selectedMarkerId === m.id && styles.markerChipTextActive]}>{m.name}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -242,16 +433,13 @@ export default function AnalysisScreen() {
               keyboardType="numeric"
             />
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-              {saving
-                ? <ActivityIndicator size="small" color={Colors.textInverse} />
-                : <Text style={styles.saveBtnText}>Enregistrer</Text>
-              }
+              {saving ? <ActivityIndicator size="small" color={Colors.textInverse} /> : <Text style={styles.saveBtnText}>Enregistrer</Text>}
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {/* AI Analyze Button */}
+      {/* AI Analyze + EBM */}
       <View style={styles.aiActionRow}>
         <TouchableOpacity
           style={[styles.aiAnalyzeBtn, isAILoading && styles.aiAnalyzeBtnLoading]}
@@ -263,12 +451,16 @@ export default function AnalysisScreen() {
             ? <ActivityIndicator size="small" color={Colors.textInverse} />
             : <MaterialIcons name="auto-awesome" size={16} color={Colors.textInverse} />
           }
-          <Text style={styles.aiAnalyzeBtnText}>
-            {isAILoading ? 'Analyse IA...' : 'Analyse IA complète'}
-          </Text>
+          <Text style={styles.aiAnalyzeBtnText}>{isAILoading ? 'Analyse IA...' : 'Analyse IA complète'}</Text>
         </TouchableOpacity>
-        <View style={styles.ebmBadge}>
-          <Text style={styles.ebmBadgeText}>EBM</Text>
+        <View style={styles.pdfActionBtn}>
+          <TouchableOpacity onPress={handleImportPDF} disabled={pdfLoading} activeOpacity={0.8}>
+            {pdfLoading
+              ? <ActivityIndicator size="small" color={Colors.gold} />
+              : <MaterialIcons name="upload-file" size={20} color={Colors.gold} />
+            }
+          </TouchableOpacity>
+          <Text style={styles.pdfActionText}>PDF</Text>
         </View>
       </View>
 
@@ -306,89 +498,71 @@ export default function AnalysisScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   headerSub: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
-  addBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
-  },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  pdfBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.goldMuted, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.gold + '44' },
+  addBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
 
-  successBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginHorizontal: Spacing.md, marginBottom: Spacing.sm,
-    backgroundColor: Colors.successMuted, borderRadius: Radius.md,
-    padding: 10, borderWidth: 1, borderColor: Colors.success + '44',
-  },
+  successBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.successMuted, borderRadius: Radius.md, padding: 10 },
   successText: { fontSize: FontSize.sm, color: Colors.success },
 
-  aiResultPanel: {
-    marginHorizontal: Spacing.md, marginBottom: Spacing.sm,
-    backgroundColor: Colors.primaryMuted, borderRadius: Radius.md,
-    padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primary + '44',
-  },
+  pdfResultPanel: { marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '44' },
+  pdfResultHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  pdfResultTitle: { flex: 1, fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.gold },
+  pdfSummary: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: 8, lineHeight: 16 },
+  pdfMarkerChip: { backgroundColor: Colors.surface, borderRadius: Radius.sm, padding: 8, borderWidth: 1, minWidth: 80, alignItems: 'center' },
+  pdfMarkerName: { fontSize: 10, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
+  pdfMarkerValue: { fontSize: FontSize.xs, fontWeight: FontWeight.bold },
+  applyPDFBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: 10, marginTop: 8 },
+  applyPDFText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
+
+  aiResultPanel: { marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.primaryMuted, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primary + '44' },
   aiResultHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   aiResultTitle: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.primary, flex: 1 },
   alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 4 },
   alertText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 16 },
   alertMarker: { fontWeight: FontWeight.semibold, color: Colors.textPrimary },
 
-  inputPanel: {
-    marginHorizontal: Spacing.md, backgroundColor: Colors.surface,
-    borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm,
-    borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  evolutionToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.primaryMuted, borderRadius: Radius.md, padding: 10, borderWidth: 1, borderColor: Colors.primary + '33' },
+  evolutionToggleText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.semibold },
+
+  evolutionPanel: { marginHorizontal: Spacing.md, marginBottom: Spacing.sm, gap: Spacing.sm },
+  chartCard: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, overflow: 'hidden' },
+  chartTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 8 },
+  chartStats: { flexDirection: 'row', gap: 16, marginBottom: 4 },
+  chartStat: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
+  bioTrendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
+  bioTrendItem: { alignItems: 'center', minWidth: 70 },
+  bioTrendName: { fontSize: 10, color: Colors.textMuted, fontWeight: FontWeight.semibold },
+  bioTrendVal: { fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  bioTrendNorm: { fontSize: 9, color: Colors.textMuted },
+
+  inputPanel: { marginHorizontal: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
   inputTitle: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary, marginBottom: Spacing.sm },
   markerChips: { gap: 8, paddingBottom: 12 },
-  markerChip: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  markerChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full, backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder },
   markerChipActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
   markerChipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
   markerChipTextActive: { color: Colors.primary, fontWeight: FontWeight.semibold },
   inputRow: { flexDirection: 'row', gap: 8 },
-  input: {
-    flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm,
-    paddingHorizontal: 14, paddingVertical: 10, color: Colors.textPrimary,
-    fontSize: FontSize.md, borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
-  saveBtn: {
-    backgroundColor: Colors.primary, borderRadius: Radius.sm,
-    paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', minWidth: 100,
-  },
+  input: { flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm, paddingHorizontal: 14, paddingVertical: 10, color: Colors.textPrimary, fontSize: FontSize.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  saveBtn: { backgroundColor: Colors.primary, borderRadius: Radius.sm, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', minWidth: 100 },
   saveBtnText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
   aiActionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
-  aiAnalyzeBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 12,
-  },
+  aiAnalyzeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 12 },
   aiAnalyzeBtnLoading: { backgroundColor: Colors.textMuted },
   aiAnalyzeBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
-  ebmBadge: {
-    backgroundColor: Colors.goldMuted, borderRadius: Radius.sm,
-    paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: Colors.gold + '44',
-  },
-  ebmBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.extrabold, color: Colors.gold },
+  pdfActionBtn: { alignItems: 'center', gap: 2, backgroundColor: Colors.goldMuted, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.gold + '44' },
+  pdfActionText: { fontSize: 9, fontWeight: FontWeight.bold, color: Colors.gold },
 
-  errorBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginHorizontal: Spacing.md, marginBottom: Spacing.sm,
-    backgroundColor: Colors.dangerMuted, borderRadius: Radius.md,
-    padding: 10,
-  },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.dangerMuted, borderRadius: Radius.md, padding: 10 },
   errorText: { flex: 1, fontSize: FontSize.xs, color: Colors.danger },
 
   tabsRow: { flexDirection: 'row', paddingHorizontal: Spacing.md, gap: 8, marginBottom: Spacing.md },
-  tabBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    paddingVertical: 10, borderRadius: Radius.sm,
-    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, borderRadius: Radius.sm, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
   tabBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   tabText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, color: Colors.textMuted },
   tabTextActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },

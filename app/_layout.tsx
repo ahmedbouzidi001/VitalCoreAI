@@ -17,6 +17,7 @@ export default function RootLayout() {
                 <Stack.Screen name="login" />
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="recipe" options={{ presentation: 'modal', headerShown: false }} />
+                <Stack.Screen name="recipes" options={{ presentation: 'modal', headerShown: false }} />
               </Stack>
             </HealthProvider>
           </AuthProvider>
