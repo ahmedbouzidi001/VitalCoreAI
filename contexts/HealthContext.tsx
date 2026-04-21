@@ -1,36 +1,28 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
-
-export interface UserProfile {
-  name: string;
-  age: number;
-  weight: number;
-  height: number;
-  gender: 'male' | 'female';
-  activityLevel: 'sedentary' | 'light' | 'moderate' | 'very_active' | 'athlete';
-  region: 'tunisia' | 'france' | 'international';
-  goals: string[];
-}
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
+import {
+  saveProfile, loadProfile,
+  saveBiomarker, loadBiomarkers,
+  saveDailyStats, loadTodayStats,
+  saveMealPlan, loadCurrentMealPlan,
+  saveWorkout, loadRecentWorkouts,
+  loadLastAnalysis,
+  analyzeBiomarkers as aiAnalyzeBiomarkers,
+  generateMealPlanDay,
+  generateWorkoutSession,
+  AIAnalysisResult,
+} from '@/services/vitalCore';
 
 export interface BiologicalMarker {
   id: string;
   name: string;
+  nameAr?: string;
+  category: 'hormones' | 'vitamins' | 'metabolic';
   value: number;
   unit: string;
   normalMin: number;
   normalMax: number;
-  category: 'hormones' | 'vitamins' | 'metabolic';
   date: string;
-}
-
-export interface MealPlanDay {
-  day: string;
-  dayIndex: number;
-  breakfast: Meal;
-  lunch: Meal;
-  dinner: Meal;
-  snack: Meal;
-  totalCalories: number;
-  macros: { protein: number; carbs: number; fat: number; fiber: number };
 }
 
 export interface Meal {
@@ -51,310 +43,422 @@ export interface Meal {
   tags: string[];
 }
 
-export interface WorkoutSession {
-  id: string;
-  name: string;
-  type: 'hypertrophy' | 'strength' | 'endurance' | 'longevity' | 'recovery';
-  duration: number;
-  exercises: Exercise[];
-  scienceTip: string;
-  scienceTipAr?: string;
+export interface MealPlanDay {
+  breakfast: Meal;
+  lunch: Meal;
+  dinner: Meal;
+  snack: Meal;
+  totalCalories: number;
+  macros: { protein: number; carbs: number; fat: number; fiber: number };
 }
 
-export interface Exercise {
+export interface WorkoutExercise {
   id: string;
   name: string;
   nameAr?: string;
+  muscleGroup: string;
   sets: number;
   reps: string;
   rest: number;
-  muscleGroup: string;
-  intensity: 'low' | 'medium' | 'high';
+  intensity: 'high' | 'medium' | 'low';
+  technique?: string;
 }
 
-export interface HealthContextType {
+export interface WorkoutSession {
+  type: 'hypertrophy' | 'strength' | 'endurance' | 'longevity' | 'recovery';
+  name: string;
+  duration: number;
+  scienceTip: string;
+  scienceTipAr?: string;
+  exercises: WorkoutExercise[];
+}
+
+export interface UserProfile {
+  name: string;
+  age: number;
+  weight: number;
+  height: number;
+  gender: 'male' | 'female';
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'very_active' | 'athlete';
+  goals: string[];
+}
+
+export interface DailyStats {
+  calories: number;
+  water: number;
+  steps: number;
+  sleep: number;
+}
+
+interface HealthContextType {
   profile: UserProfile;
-  updateProfile: (p: Partial<UserProfile>) => void;
+  updateProfile: (updates: Partial<UserProfile>) => void;
   biomarkers: BiologicalMarker[];
-  updateBiomarkers: (markers: BiologicalMarker[]) => void;
   addBiomarker: (marker: BiologicalMarker) => void;
-  weeklyMealPlan: MealPlanDay[];
-  regenerateMealPlan: () => void;
-  weeklyWorkout: WorkoutSession[];
-  regenerateWorkout: (type: WorkoutSession['type']) => void;
-  healthScore: number;
   deficiencies: BiologicalMarker[];
-  dailyStats: { calories: number; water: number; steps: number; sleep: number };
-  updateDailyStats: (stats: Partial<HealthContextType['dailyStats']>) => void;
-  onboardingDone: boolean;
+  healthScore: number;
+  dailyStats: DailyStats;
+  updateDailyStats: (updates: Partial<DailyStats>) => void;
+  weeklyMealPlan: MealPlanDay[];
+  weeklyWorkout: WorkoutSession[];
+  regenerateMealPlan: () => Promise<void>;
+  regenerateWorkout: (type: WorkoutSession['type']) => Promise<void>;
   completeOnboarding: () => void;
+  onboardingDone: boolean;
+  aiAnalysis: AIAnalysisResult | null;
+  runAIAnalysis: () => Promise<void>;
+  isAILoading: boolean;
+  aiError: string | null;
+  isMealLoading: boolean;
+  isWorkoutLoading: boolean;
+  isDataLoading: boolean;
 }
 
 const HealthContext = createContext<HealthContextType | undefined>(undefined);
 
-const DEFAULT_PROFILE: UserProfile = {
-  name: 'Alex',
-  age: 32,
-  weight: 78,
-  height: 178,
-  gender: 'male',
-  activityLevel: 'moderate',
-  region: 'tunisia',
-  goals: ['muscle_gain', 'optimize_hormones'],
+// Default data
+const DEFAULT_BIOMARKERS: BiologicalMarker[] = [
+  { id: 'testosterone', name: 'Testostérone', nameAr: 'التستوستيرون', category: 'hormones', value: 520, unit: 'ng/dL', normalMin: 300, normalMax: 1000, date: '2025-04-01' },
+  { id: 'cortisol', name: 'Cortisol', nameAr: 'الكورتيزول', category: 'hormones', value: 18, unit: 'µg/dL', normalMin: 6, normalMax: 23, date: '2025-04-01' },
+  { id: 'tsh', name: 'TSH (Thyroïde)', nameAr: 'هرمون الغدة الدرقية', category: 'hormones', value: 2.1, unit: 'mIU/L', normalMin: 0.4, normalMax: 4.0, date: '2025-04-01' },
+  { id: 'insulin', name: 'Insuline', nameAr: 'الأنسولين', category: 'hormones', value: 9, unit: 'µIU/mL', normalMin: 2, normalMax: 25, date: '2025-04-01' },
+  { id: 'vitamin_d', name: 'Vitamine D', nameAr: 'فيتامين د', category: 'vitamins', value: 18, unit: 'ng/mL', normalMin: 30, normalMax: 100, date: '2025-04-01' },
+  { id: 'vitamin_b12', name: 'Vitamine B12', nameAr: 'فيتامين ب12', category: 'vitamins', value: 380, unit: 'pg/mL', normalMin: 200, normalMax: 900, date: '2025-04-01' },
+  { id: 'magnesium', name: 'Magnésium', nameAr: 'المغنيسيوم', category: 'vitamins', value: 0.72, unit: 'mmol/L', normalMin: 0.75, normalMax: 1.0, date: '2025-04-01' },
+  { id: 'ferritin', name: 'Ferritine', nameAr: 'الفيريتين', category: 'vitamins', value: 45, unit: 'ng/mL', normalMin: 30, normalMax: 300, date: '2025-04-01' },
+  { id: 'glucose', name: 'Glycémie à jeun', nameAr: 'سكر الدم الصائم', category: 'metabolic', value: 92, unit: 'mg/dL', normalMin: 70, normalMax: 100, date: '2025-04-01' },
+  { id: 'cholesterol', name: 'Cholestérol total', nameAr: 'الكوليسترول الكلي', category: 'metabolic', value: 175, unit: 'mg/dL', normalMin: 0, normalMax: 200, date: '2025-04-01' },
+  { id: 'creatinine', name: 'Créatinine', nameAr: 'الكرياتينين', category: 'metabolic', value: 0.9, unit: 'mg/dL', normalMin: 0.7, normalMax: 1.3, date: '2025-04-01' },
+  { id: 'hba1c', name: 'HbA1c', nameAr: 'الهيموغلوبين السكري', category: 'metabolic', value: 5.2, unit: '%', normalMin: 0, normalMax: 5.7, date: '2025-04-01' },
+];
+
+const DEFAULT_MEAL: Meal = {
+  id: 'default', name: 'Salade Tunisienne + Grillades', nameAr: 'سلطة تونسية مع مشوي',
+  calories: 450, protein: 35, carbs: 30, fat: 18, fiber: 6, prepTime: 20, image: 'meal-1',
+  ingredients: ['200g poulet grillé', '1 tomate', '1 concombre', '50g olives', 'jus de citron', 'huile d\'olive'],
+  ingredientsAr: ['200 غ دجاج مشوي', 'طماطم', 'خيار', '50 غ زيتون', 'عصير ليمون', 'زيت زيتون'],
+  instructions: ['Grillez le poulet 15 min.', 'Coupez les légumes en dés.', 'Mélangez avec citron et huile.'],
+  instructionsAr: ['اشوِ الدجاج 15 دقيقة.', 'قطع الخضار مكعبات.', 'اخلط مع الليمون والزيت.'],
+  tags: ['high-protein', 'tunisian', 'mediterranean'],
 };
 
-const MEAL_IMAGES = [
-  require('@/assets/images/meal-1.png'),
-  require('@/assets/images/meal-2.png'),
-  require('@/assets/images/meal-3.png'),
-];
+const DEFAULT_MEAL_PLAN_DAY: MealPlanDay = {
+  breakfast: { ...DEFAULT_MEAL, id: 'b1', name: 'Œufs + Avocat + Épinards', nameAr: 'بيض بالأفوكادو والسبانخ', calories: 380, protein: 28, carbs: 15, fat: 22, fiber: 5, image: 'meal-2', prepTime: 10, ingredients: ['3 œufs', '1/2 avocat', '100g épinards', 'huile olive'], ingredientsAr: ['3 بيض', 'نصف أفوكادو', '100غ سبانخ', 'زيت زيتون'], instructions: ['Faites revenir les épinards.', 'Ajoutez les œufs et brouiller.', 'Servez avec l\'avocat en tranches.'], instructionsAr: ['قلي السبانخ.', 'أضف البيض واخلط.', 'قدم مع شرائح الأفوكادو.'], tags: ['keto-friendly', 'high-protein'] },
+  lunch: { ...DEFAULT_MEAL, id: 'l1', name: 'Couscous au Poulet et Légumes', nameAr: 'كسكسي بالدجاج والخضر', calories: 620, protein: 42, carbs: 65, fat: 14, fiber: 8, image: 'meal-1', prepTime: 35, ingredients: ['200g couscous', '200g poulet', 'carottes', 'courgette', 'pois chiches', 'harissa'], ingredientsAr: ['200غ كسكسي', '200غ دجاج', 'جزر', 'كوسة', 'حمص', 'هريسة'], instructions: ['Cuisez le couscous à la vapeur.', 'Préparez le bouillon avec le poulet et les légumes.', 'Versez sur le couscous et servez chaud.'], instructionsAr: ['اطبخ الكسكسي على البخار.', 'حضر المرق مع الدجاج والخضر.', 'صب على الكسكسي وقدم ساخناً.'], tags: ['tunisian', 'traditional'] },
+  dinner: { ...DEFAULT_MEAL, id: 'd1', name: 'Saumon + Quinoa + Brocoli', nameAr: 'سلمون مع الكينوا والبروكلي', calories: 520, protein: 40, carbs: 38, fat: 16, fiber: 7, image: 'meal-3', prepTime: 25, ingredients: ['180g saumon', '80g quinoa', '150g brocoli', 'citron', 'ail', 'herbes'], ingredientsAr: ['180غ سلمون', '80غ كينوا', '150غ بروكلي', 'ليمون', 'ثوم', 'أعشاب'], instructions: ['Cuisez le quinoa 15 min.', 'Griller le saumon 4 min/côté.', 'Vapeur brocoli 5 min. Servez ensemble.'], instructionsAr: ['اطبخ الكينوا 15 دقيقة.', 'اشوِ السلمون 4 دقائق لكل جانب.', 'بخر البروكلي 5 دقائق وقدم.'], tags: ['omega-3', 'anti-inflammatory'] },
+  snack: { ...DEFAULT_MEAL, id: 's1', name: 'Smoothie Protéiné + Dattes', nameAr: 'سموذي البروتين مع التمر', calories: 280, protein: 18, carbs: 32, fat: 6, fiber: 4, image: 'meal-2', prepTime: 5, ingredients: ['200ml lait d\'amande', '1 scoop protéine', '2 dattes', '1/2 banane', 'cannelle'], ingredientsAr: ['200مل حليب لوز', 'ملعقة بروتين', 'تمرتان', 'نصف موزة', 'قرفة'], instructions: ['Mixez tous les ingrédients.', 'Servez bien frais.'], instructionsAr: ['اخلط جميع المكونات.', 'قدم بارداً.'], tags: ['post-workout', 'tunisian'] },
+  totalCalories: 1800,
+  macros: { protein: 128, carbs: 150, fat: 58, fiber: 24 },
+};
 
-function generateMealPlan(profile: UserProfile, biomarkers: BiologicalMarker[]): MealPlanDay[] {
-  const activityMultipliers = { sedentary: 1.2, light: 1.375, moderate: 1.55, very_active: 1.725, athlete: 1.9 };
-  const bmr = profile.gender === 'male'
-    ? 88.362 + 13.397 * profile.weight + 4.799 * profile.height - 5.677 * profile.age
-    : 447.593 + 9.247 * profile.weight + 3.098 * profile.height - 4.330 * profile.age;
-  const tdee = Math.round(bmr * activityMultipliers[profile.activityLevel]);
+const DEFAULT_WORKOUT: WorkoutSession = {
+  type: 'hypertrophy', name: 'Upper Body Hypertrophy', duration: 60,
+  scienceTip: 'Les séries de 8-12 reps avec 70-80% de 1RM maximisent l\'hypertrophie musculaire (Schoenfeld, 2010).',
+  scienceTipAr: 'التدريب بـ 8-12 تكرار بـ 70-80% من الحد الأقصى يعظم نمو العضلات.',
+  exercises: [
+    { id: 'e1', name: 'Développé couché', nameAr: 'ضغط الصدر', muscleGroup: 'Pectoraux', sets: 4, reps: '8-10', rest: 90, intensity: 'high' },
+    { id: 'e2', name: 'Rowing barre', nameAr: 'سحب بالبار', muscleGroup: 'Dos', sets: 4, reps: '8-10', rest: 90, intensity: 'high' },
+    { id: 'e3', name: 'Développé militaire', nameAr: 'ضغط الأكتاف', muscleGroup: 'Épaules', sets: 3, reps: '10-12', rest: 75, intensity: 'medium' },
+    { id: 'e4', name: 'Curl biceps', nameAr: 'تمرين البايسبس', muscleGroup: 'Biceps', sets: 3, reps: '12', rest: 60, intensity: 'medium' },
+    { id: 'e5', name: 'Triceps poulie', nameAr: 'تمرين الترايسبس', muscleGroup: 'Triceps', sets: 3, reps: '12-15', rest: 60, intensity: 'medium' },
+  ],
+};
 
-  const hasMgDeficiency = biomarkers.some(m => m.id === 'magnesium' && m.value < m.normalMin);
-  const hasVitDDeficiency = biomarkers.some(m => m.id === 'vitamin_d' && m.value < m.normalMin);
+const DEFAULT_RECOVERY: WorkoutSession = {
+  type: 'recovery', name: 'Récupération Active', duration: 30,
+  scienceTip: 'La récupération active améliore l\'élimination du lactate et réduit les courbatures.',
+  scienceTipAr: 'التعافي النشط يسرع إزالة حمض اللاكتيك ويقلل ألم العضلات.',
+  exercises: [],
+};
 
-  const breakfasts: Meal[] = [
-    {
-      id: 'b1', name: 'Scrambled Eggs & Avocado Bowl', nameAr: 'وعاء البيض المخفوق والأفوكادو',
-      calories: Math.round(tdee * 0.25), protein: 28, carbs: 22, fat: 18, fiber: 6, prepTime: 12,
-      image: 'meal-2', ingredients: ['3 oeufs bio', '1/2 avocat', '100g épinards', '1 tranche pain complet', hasMgDeficiency ? '30g graines de citrouille (Mg++)' : '30g noix', 'Huile d\'olive extra-vierge'],
-      ingredientsAr: ['3 بيضات عضوية', 'نصف أفوكادو', '100غ سبانخ', 'شريحة خبز كامل', hasMgDeficiency ? '30غ بذور القرع (مغنيسيوم)' : '30غ مكسرات', 'زيت زيتون بكر'],
-      instructions: ['Battre les oeufs avec sel et poivre noir', 'Faire revenir les épinards à feu moyen', 'Cuire les oeufs brouillés doucement', 'Disposer avec l\'avocat tranché'],
-      instructionsAr: ['اخفقي البيض مع الملح والفلفل', 'قلي السبانخ على نار متوسطة', 'اطهي البيض المخفوق ببطء', 'رتبي مع شرائح الأفوكادو'],
-      tags: ['high-protein', 'healthy-fats', hasMgDeficiency ? 'magnesium-boost' : 'balanced'],
-    },
-    {
-      id: 'b2', name: 'Protein Smoothie Bowl', nameAr: 'وعاء سموثي البروتين',
-      calories: Math.round(tdee * 0.22), protein: 32, carbs: 35, fat: 8, fiber: 8, prepTime: 8,
-      image: 'meal-3', ingredients: ['30g whey protein vanille', '200g myrtilles congelées', '1 banane', '200ml lait d\'amande', hasVitDDeficiency ? '2cs graines de lin (Vit D source)' : '2cs granola', 'Miel de Manuka'],
-      ingredientsAr: ['30غ بروتين مصل اللبن فانيليا', '200غ توت مجمد', 'موزة', '200مل حليب لوز', hasVitDDeficiency ? '2م بذور كتان' : '2م حبوب مقرمشة', 'عسل مانوكا'],
-      instructions: ['Mixer tous les ingrédients sauf les toppings', 'Verser dans un bol', 'Garnir avec granola et fruits frais'],
-      instructionsAr: ['خلطي جميع المكونات عدا الإضافات', 'صبي في وعاء', 'زيني بالحبوب والفواكه الطازجة'],
-      tags: ['post-workout', 'antioxidants', 'quick'],
-    },
-  ];
-
-  const lunches: Meal[] = [
-    {
-      id: 'l1', name: 'Salmon & Quinoa Power Bowl', nameAr: 'وعاء السلمون والكينوا',
-      calories: Math.round(tdee * 0.35), protein: 42, carbs: 48, fat: 22, fiber: 10, prepTime: 25,
-      image: 'meal-1', ingredients: ['180g saumon atlantique', '100g quinoa cuit', '150g brocoli vapeur', '80g tomates cerise', 'Citron, aneth, huile d\'olive', hasMgDeficiency ? 'Épinards (source Mg)' : 'Roquette'],
-      ingredientsAr: ['180غ سمك السلمون', '100غ كينوا مطبوخ', '150غ بروكلي مطهو', '80غ طماطم كرزية', 'ليمون، شبت، زيت زيتون', hasMgDeficiency ? 'سبانخ (مصدر مغنيسيوم)' : 'جرجير'],
-      instructions: ['Assaisonner le saumon avec citron et aneth', 'Cuire à la vapeur 15 min', 'Préparer le quinoa selon instructions', 'Assembler le bowl avec légumes'],
-      instructionsAr: ['تبلي السلمون بالليمون والشبت', 'اطهيه على البخار 15 دقيقة', 'حضري الكينوا حسب التعليمات', 'رتبي الوعاء مع الخضروات'],
-      tags: ['omega-3', 'complete-protein', 'anti-inflammatory'],
-    },
-    {
-      id: 'l2', name: 'Grilled Chicken Couscous Tunisien', nameAr: 'كسكسي الدجاج المشوي التونسي',
-      calories: Math.round(tdee * 0.33), protein: 38, carbs: 52, fat: 12, fiber: 9, prepTime: 30,
-      image: 'meal-1', ingredients: ['200g filet poulet', '120g couscous', '2 carottes', '1 courgette', 'Pois chiches', 'Harissa légère', 'Cumin, coriandre'],
-      ingredientsAr: ['200غ صدر دجاج', '120غ كسكسي', '2 جزر', 'كوسا', 'حمص', 'هريسة خفيفة', 'كمون، كزبرة'],
-      instructions: ['Mariner le poulet avec épices 30 min', 'Griller à feu vif 6 min/côté', 'Cuire couscous selon instructions', 'Préparer légumes à la vapeur'],
-      instructionsAr: ['تبلي الدجاج بالتوابل 30 دقيقة', 'اشوي على نار عالية 6 دقائق لكل جانب', 'اطهي الكسكسي حسب التعليمات', 'حضري الخضروات على البخار'],
-      tags: ['tunisian', 'high-carb', 'traditional'],
-    },
-  ];
-
-  const dinners: Meal[] = [
-    {
-      id: 'd1', name: 'Lentil & Vegetable Tagine', nameAr: 'طاجين العدس والخضروات',
-      calories: Math.round(tdee * 0.28), protein: 24, carbs: 42, fat: 8, fiber: 14, prepTime: 35,
-      image: 'meal-1', ingredients: ['200g lentilles vertes', '1 tomate', '1 poivron', '1 oignon', 'Gingembre frais', 'Curcuma, cumin', 'Coriandre fraîche'],
-      ingredientsAr: ['200غ عدس أخضر', 'طماطمة', 'فليفلة', 'بصلة', 'زنجبيل طازج', 'كركم، كمون', 'كزبرة طازجة'],
-      instructions: ['Faire revenir l\'oignon et gingembre', 'Ajouter épices et légumes', 'Incorporer lentilles et eau', 'Mijoter 25 min à feu doux'],
-      instructionsAr: ['قلي البصل والزنجبيل', 'أضيفي التوابل والخضروات', 'أضيفي العدس والماء', 'اطهي على نار هادئة 25 دقيقة'],
-      tags: ['plant-based', 'fiber-rich', 'anti-inflammatory', 'iron'],
-    },
-  ];
-
-  const snacks: Meal[] = [
-    {
-      id: 's1', name: 'Greek Yogurt & Nuts', nameAr: 'زبادي يوناني مع مكسرات',
-      calories: Math.round(tdee * 0.1), protein: 14, carbs: 12, fat: 9, fiber: 2, prepTime: 3,
-      image: 'meal-3', ingredients: ['200g yaourt grec 0%', hasMgDeficiency ? '20g amandes (Mg++)' : '20g noix', '1cs miel', 'Quelques baies'],
-      ingredientsAr: ['200غ زبادي يوناني', hasMgDeficiency ? '20غ لوز (مغنيسيوم)' : '20غ جوز', 'ملعقة عسل', 'قليل من التوت'],
-      instructions: ['Mélanger yaourt et miel', 'Garnir avec noix et baies'],
-      instructionsAr: ['امزجي الزبادي مع العسل', 'زيني بالمكسرات والتوت'],
-      tags: ['probiotic', 'quick', 'protein'],
-    },
-  ];
-
-  const dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-
-  return dayNames.map((day, i) => {
-    const b = breakfasts[i % breakfasts.length];
-    const l = lunches[i % lunches.length];
-    const d = dinners[i % dinners.length];
-    const s = snacks[0];
-    return {
-      day, dayIndex: i,
-      breakfast: b, lunch: l, dinner: d, snack: s,
-      totalCalories: b.calories + l.calories + d.calories + s.calories,
-      macros: {
-        protein: b.protein + l.protein + d.protein + s.protein,
-        carbs: b.carbs + l.carbs + d.carbs + s.carbs,
-        fat: b.fat + l.fat + d.fat + s.fat,
-        fiber: b.fiber + l.fiber + d.fiber + s.fiber,
-      },
-    };
-  });
+function buildDefaultWeeklyWorkout(): WorkoutSession[] {
+  const types: WorkoutSession['type'][] = ['hypertrophy', 'strength', 'recovery', 'endurance', 'hypertrophy', 'longevity', 'recovery'];
+  return types.map(t => t === 'recovery' ? DEFAULT_RECOVERY : { ...DEFAULT_WORKOUT, type: t });
 }
 
-function generateWorkout(type: WorkoutSession['type'], profile: UserProfile): WorkoutSession[] {
-  const hypertrophyTip = 'Research: 6-12 reps at 65-80% 1RM with 60-90s rest maximizes muscle protein synthesis (Schoenfeld 2017).';
-  const strengthTip = 'Research: 1-5 reps at 85-100% 1RM with 3-5min rest optimizes neuromuscular adaptations (Kramer et al.).';
-  const enduranceTip = 'Research: Zone 2 training (60-70% HRmax) for 30-60min/session improves mitochondrial density.';
-  const longevityTip = 'Research: Combining resistance training 2x/week + Zone 2 cardio reduces all-cause mortality by 40% (Stamatakis 2018).';
-
-  const days: WorkoutSession[] = [
-    {
-      id: 'w1', name: 'Push - Chest & Shoulders', type: 'hypertrophy', duration: 60,
-      scienceTip: hypertrophyTip,
-      scienceTipAr: 'بحث: 6-12 تكراراً بـ 65-80% من أقصى قدرة يزيد تخليق بروتين العضلات (شونفيلد 2017).',
-      exercises: [
-        { id: 'e1', name: 'Bench Press', nameAr: 'ضغط المقعد', sets: 4, reps: '8-10', rest: 90, muscleGroup: 'Chest', intensity: 'high' },
-        { id: 'e2', name: 'Overhead Press', nameAr: 'ضغط فوق الرأس', sets: 4, reps: '8-10', rest: 90, muscleGroup: 'Shoulders', intensity: 'high' },
-        { id: 'e3', name: 'Incline DB Press', nameAr: 'ضغط مائل', sets: 3, reps: '10-12', rest: 75, muscleGroup: 'Upper Chest', intensity: 'medium' },
-        { id: 'e4', name: 'Lateral Raises', nameAr: 'رفع جانبي', sets: 4, reps: '12-15', rest: 60, muscleGroup: 'Lateral Delts', intensity: 'medium' },
-        { id: 'e5', name: 'Tricep Dips', nameAr: 'غطس الترايسبس', sets: 3, reps: '10-12', rest: 60, muscleGroup: 'Triceps', intensity: 'medium' },
-      ],
-    },
-    {
-      id: 'w2', name: 'Pull - Back & Biceps', type: 'hypertrophy', duration: 60,
-      scienceTip: hypertrophyTip,
-      scienceTipAr: 'بحث: 6-12 تكراراً بـ 65-80% من أقصى قدرة يزيد تخليق بروتين العضلات.',
-      exercises: [
-        { id: 'e6', name: 'Deadlift', nameAr: 'رفع الحديد الميت', sets: 4, reps: '5-6', rest: 180, muscleGroup: 'Full Back', intensity: 'high' },
-        { id: 'e7', name: 'Pull-ups', nameAr: 'عقلة', sets: 4, reps: '6-10', rest: 120, muscleGroup: 'Lats', intensity: 'high' },
-        { id: 'e8', name: 'Barbell Row', nameAr: 'تجديف بالبار', sets: 4, reps: '8-10', rest: 90, muscleGroup: 'Mid Back', intensity: 'high' },
-        { id: 'e9', name: 'Face Pulls', nameAr: 'سحب الوجه', sets: 3, reps: '15-20', rest: 60, muscleGroup: 'Rear Delts', intensity: 'low' },
-        { id: 'e10', name: 'Hammer Curls', nameAr: 'تجعيد المطرقة', sets: 3, reps: '10-12', rest: 60, muscleGroup: 'Biceps', intensity: 'medium' },
-      ],
-    },
-    {
-      id: 'w3', name: 'Legs & Core Power', type: 'strength', duration: 70,
-      scienceTip: strengthTip,
-      scienceTipAr: 'بحث: 1-5 تكرارات بـ 85-100% من الحد الأقصى يحسن التكيفات العصبية العضلية.',
-      exercises: [
-        { id: 'e11', name: 'Squat', nameAr: 'قرفصاء', sets: 5, reps: '3-5', rest: 240, muscleGroup: 'Quadriceps', intensity: 'high' },
-        { id: 'e12', name: 'Romanian Deadlift', nameAr: 'رفع ميت روماني', sets: 4, reps: '6-8', rest: 120, muscleGroup: 'Hamstrings', intensity: 'high' },
-        { id: 'e13', name: 'Leg Press', nameAr: 'ضغط الساق', sets: 3, reps: '10-12', rest: 90, muscleGroup: 'Quads', intensity: 'medium' },
-        { id: 'e14', name: 'Planks', nameAr: 'لوحة', sets: 3, reps: '45-60s', rest: 60, muscleGroup: 'Core', intensity: 'medium' },
-        { id: 'e15', name: 'Calf Raises', nameAr: 'رفع الكاحل', sets: 4, reps: '15-20', rest: 45, muscleGroup: 'Calves', intensity: 'low' },
-      ],
-    },
-    {
-      id: 'w4', name: 'Zone 2 Cardio + Mobility', type: 'endurance', duration: 50,
-      scienceTip: enduranceTip,
-      scienceTipAr: 'بحث: التدريب في المنطقة 2 (60-70% من الحد الأقصى لمعدل ضربات القلب) يحسن كثافة الميتوكوندريا.',
-      exercises: [
-        { id: 'e16', name: 'Cycling Zone 2', nameAr: 'ركوب دراجة منطقة 2', sets: 1, reps: '35min', rest: 0, muscleGroup: 'Cardiovascular', intensity: 'low' },
-        { id: 'e17', name: 'Hip Flexor Stretch', nameAr: 'مط ثنية الورك', sets: 3, reps: '45s each', rest: 30, muscleGroup: 'Hip Flexors', intensity: 'low' },
-        { id: 'e18', name: 'Thoracic Rotation', nameAr: 'دوران الصدر', sets: 3, reps: '10 each', rest: 30, muscleGroup: 'Thoracic Spine', intensity: 'low' },
-      ],
-    },
-    {
-      id: 'w5', name: 'Full Body Longevity', type: 'longevity', duration: 55,
-      scienceTip: longevityTip,
-      scienceTipAr: 'بحث: الجمع بين التدريب المقاوم مرتين/أسبوع وتمارين هوائية يقلل الوفيات بنسبة 40%.',
-      exercises: [
-        { id: 'e19', name: 'Goblet Squat', nameAr: 'قرفصاء الكأس', sets: 3, reps: '12', rest: 60, muscleGroup: 'Full Lower', intensity: 'medium' },
-        { id: 'e20', name: 'Push-up Variations', nameAr: 'تنويعات الضغط', sets: 3, reps: '10-15', rest: 60, muscleGroup: 'Chest/Triceps', intensity: 'medium' },
-        { id: 'e21', name: 'Inverted Row', nameAr: 'تجديف مقلوب', sets: 3, reps: '10-12', rest: 60, muscleGroup: 'Back', intensity: 'medium' },
-        { id: 'e22', name: 'Farmer Walk', nameAr: 'مشي الفلاح', sets: 4, reps: '30m', rest: 90, muscleGroup: 'Full Body', intensity: 'medium' },
-        { id: 'e23', name: 'Breathing Meditation', nameAr: 'تأمل التنفس', sets: 1, reps: '10min', rest: 0, muscleGroup: 'Recovery', intensity: 'low' },
-      ],
-    },
-    {
-      id: 'w6', name: 'Active Recovery', type: 'recovery', duration: 40,
-      scienceTip: 'Research: Active recovery at 30-40% HRmax accelerates lactate clearance by 2x vs passive rest (Monedero & Donne 2000).',
-      scienceTipAr: 'بحث: الاستشفاء النشط بـ 30-40% من الحد الأقصى يسرع إزالة اللاكتات مرتين مقارنة بالراحة السلبية.',
-      exercises: [
-        { id: 'e24', name: 'Yoga Flow', nameAr: 'تدفق اليوغا', sets: 1, reps: '20min', rest: 0, muscleGroup: 'Full Body', intensity: 'low' },
-        { id: 'e25', name: 'Foam Rolling', nameAr: 'دحرجة الإسفنج', sets: 1, reps: '10min', rest: 0, muscleGroup: 'Recovery', intensity: 'low' },
-        { id: 'e26', name: 'Cold Contrast Shower', nameAr: 'دش التباين الحراري', sets: 1, reps: '3 cycles', rest: 0, muscleGroup: 'CNS Recovery', intensity: 'low' },
-      ],
-    },
-    {
-      id: 'w7', name: 'Rest Day', type: 'recovery', duration: 0,
-      scienceTip: 'Research: 1-2 full rest days per week are essential for muscle protein synthesis and hormonal recovery (Damas et al. 2016).',
-      scienceTipAr: 'بحث: يوم أو يومان راحة كاملة في الأسبوع ضروريان لتخليق البروتين العضلي والاستشفاء الهرموني.',
-      exercises: [],
-    },
-  ];
-
-  return days;
+function buildDefaultWeeklyMealPlan(): MealPlanDay[] {
+  return Array(7).fill(null).map(() => ({ ...DEFAULT_MEAL_PLAN_DAY }));
 }
-
-const DEFAULT_BIOMARKERS: BiologicalMarker[] = [
-  { id: 'testosterone', name: 'Testosterone', value: 520, unit: 'ng/dL', normalMin: 300, normalMax: 1000, category: 'hormones', date: '2025-12-01' },
-  { id: 'cortisol', name: 'Cortisol', value: 18, unit: 'µg/dL', normalMin: 6, normalMax: 23, category: 'hormones', date: '2025-12-01' },
-  { id: 'insulin', name: 'Insulin', value: 8, unit: 'µU/mL', normalMin: 2, normalMax: 25, category: 'hormones', date: '2025-12-01' },
-  { id: 'tsh', name: 'Thyroid (TSH)', value: 2.1, unit: 'mIU/L', normalMin: 0.4, normalMax: 4.0, category: 'hormones', date: '2025-12-01' },
-  { id: 'vitamin_d', name: 'Vitamin D', value: 22, unit: 'ng/mL', normalMin: 30, normalMax: 80, category: 'vitamins', date: '2025-12-01' },
-  { id: 'vitamin_b12', name: 'Vitamin B12', value: 410, unit: 'pg/mL', normalMin: 200, normalMax: 900, category: 'vitamins', date: '2025-12-01' },
-  { id: 'magnesium', name: 'Magnesium', value: 1.6, unit: 'mg/dL', normalMin: 1.7, normalMax: 2.4, category: 'vitamins', date: '2025-12-01' },
-  { id: 'ferritin', name: 'Ferritin', value: 85, unit: 'ng/mL', normalMin: 30, normalMax: 300, category: 'vitamins', date: '2025-12-01' },
-  { id: 'glucose', name: 'Glucose', value: 92, unit: 'mg/dL', normalMin: 70, normalMax: 100, category: 'metabolic', date: '2025-12-01' },
-  { id: 'cholesterol', name: 'Total Cholesterol', value: 195, unit: 'mg/dL', normalMin: 0, normalMax: 200, category: 'metabolic', date: '2025-12-01' },
-];
 
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const { user } = useAuth();
+
+  const [profile, setProfile] = useState<UserProfile>({
+    name: 'Ahmed', age: 28, weight: 78, height: 178, gender: 'male',
+    activityLevel: 'moderate', goals: ['muscle_gain', 'optimize_hormones'],
+  });
   const [biomarkers, setBiomarkers] = useState<BiologicalMarker[]>(DEFAULT_BIOMARKERS);
-  const [weeklyMealPlan, setWeeklyMealPlan] = useState<MealPlanDay[]>(() => generateMealPlan(DEFAULT_PROFILE, DEFAULT_BIOMARKERS));
-  const [weeklyWorkout, setWeeklyWorkout] = useState<WorkoutSession[]>(() => generateWorkout('hypertrophy', DEFAULT_PROFILE));
-  const [dailyStats, setDailyStats] = useState({ calories: 1842, water: 1800, steps: 8340, sleep: 7.2 });
+  const [dailyStats, setDailyStats] = useState<DailyStats>({ calories: 1240, water: 1800, steps: 7240, sleep: 6.5 });
+  const [weeklyMealPlan, setWeeklyMealPlan] = useState<MealPlanDay[]>(buildDefaultWeeklyMealPlan());
+  const [weeklyWorkout, setWeeklyWorkout] = useState<WorkoutSession[]>(buildDefaultWeeklyWorkout());
   const [onboardingDone, setOnboardingDone] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null);
+  const [isAILoading, setIsAILoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [isMealLoading, setIsMealLoading] = useState(false);
+  const [isWorkoutLoading, setIsWorkoutLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
 
-  const updateProfile = (p: Partial<UserProfile>) => {
-    const updated = { ...profile, ...p };
-    setProfile(updated);
-    setWeeklyMealPlan(generateMealPlan(updated, biomarkers));
+  // Load persisted data when user logs in
+  useEffect(() => {
+    if (!user) return;
+    loadUserData();
+  }, [user?.id]);
+
+  const loadUserData = async () => {
+    if (!user) return;
+    setIsDataLoading(true);
+    try {
+      const [profileRes, bioRes, statsRes, mealRes, analysisRes] = await Promise.all([
+        loadProfile(user.id),
+        loadBiomarkers(user.id),
+        loadTodayStats(user.id),
+        loadCurrentMealPlan(user.id),
+        loadLastAnalysis(user.id),
+      ]);
+
+      if (profileRes.data) {
+        setProfile(prev => ({
+          ...prev,
+          age: profileRes.data.age || prev.age,
+          weight: profileRes.data.weight || prev.weight,
+          height: profileRes.data.height || prev.height,
+          gender: profileRes.data.gender || prev.gender,
+          activityLevel: profileRes.data.activity_level || prev.activityLevel,
+          goals: profileRes.data.goals || prev.goals,
+        }));
+        if (profileRes.data.onboarding_done) setOnboardingDone(true);
+      }
+
+      if (bioRes.data.length > 0) {
+        setBiomarkers(bioRes.data.map((b: any) => ({
+          id: b.id,
+          name: b.name,
+          nameAr: b.name_ar,
+          category: b.category,
+          value: b.value,
+          unit: b.unit,
+          normalMin: b.normal_min,
+          normalMax: b.normal_max,
+          date: b.date,
+        })));
+      }
+
+      if (statsRes.data) {
+        setDailyStats({
+          calories: statsRes.data.calories || 0,
+          water: statsRes.data.water || 0,
+          steps: statsRes.data.steps || 0,
+          sleep: statsRes.data.sleep || 0,
+        });
+      }
+
+      if (mealRes.data?.plan_data) {
+        setWeeklyMealPlan(mealRes.data.plan_data);
+      }
+
+      if (analysisRes.data) {
+        setAiAnalysis(analysisRes.data);
+      }
+    } finally {
+      setIsDataLoading(false);
+    }
   };
 
-  const updateBiomarkers = (markers: BiologicalMarker[]) => {
-    setBiomarkers(markers);
-    setWeeklyMealPlan(generateMealPlan(profile, markers));
-  };
+  const deficiencies = biomarkers.filter(b => b.value < b.normalMin);
 
-  const addBiomarker = (marker: BiologicalMarker) => {
-    const updated = biomarkers.map(b => b.id === marker.id ? marker : b);
-    if (!updated.find(b => b.id === marker.id)) updated.push(marker);
-    updateBiomarkers(updated);
-  };
-
-  const regenerateMealPlan = () => setWeeklyMealPlan(generateMealPlan(profile, biomarkers));
-
-  const regenerateWorkout = (type: WorkoutSession['type']) => setWeeklyWorkout(generateWorkout(type, profile));
-
-  const deficiencies = biomarkers.filter(m => m.value < m.normalMin);
-
-  const healthScore = Math.min(100, Math.round(
-    80 - (deficiencies.length * 8) +
-    (biomarkers.filter(m => m.value >= m.normalMin && m.value <= m.normalMax).length * 2)
+  const healthScore = Math.max(0, Math.min(100,
+    100 - (deficiencies.length * 12) +
+    (dailyStats.sleep >= 7 ? 5 : -5) +
+    (dailyStats.steps >= 8000 ? 5 : -3) +
+    (dailyStats.water >= 2000 ? 3 : -2)
   ));
 
-  const updateDailyStats = (stats: Partial<typeof dailyStats>) => setDailyStats(prev => ({ ...prev, ...stats }));
+  const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
+    setProfile(prev => {
+      const updated = { ...prev, ...updates };
+      if (user) {
+        saveProfile(user.id, {
+          age: updated.age,
+          weight: updated.weight,
+          height: updated.height,
+          gender: updated.gender,
+          activity_level: updated.activityLevel,
+          goals: updated.goals,
+        }).catch(console.error);
+      }
+      return updated;
+    });
+  }, [user]);
 
-  const completeOnboarding = () => setOnboardingDone(true);
+  const addBiomarker = useCallback(async (marker: BiologicalMarker) => {
+    setBiomarkers(prev => {
+      const idx = prev.findIndex(b => b.id === marker.id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = marker;
+        return updated;
+      }
+      return [...prev, marker];
+    });
+    if (user) {
+      await saveBiomarker(user.id, marker);
+    }
+  }, [user]);
+
+  const updateDailyStats = useCallback(async (updates: Partial<DailyStats>) => {
+    setDailyStats(prev => {
+      const updated = { ...prev, ...updates };
+      if (user) {
+        saveDailyStats(user.id, {
+          calories: updated.calories,
+          water: updated.water,
+          steps: updated.steps,
+          sleep: updated.sleep,
+        }).catch(console.error);
+      }
+      return updated;
+    });
+  }, [user]);
+
+  const runAIAnalysis = useCallback(async () => {
+    setIsAILoading(true);
+    setAiError(null);
+    try {
+      const language = 'fr'; // Will be dynamic
+      const bmr = profile.gender === 'male'
+        ? 88.362 + 13.397 * profile.weight + 4.799 * profile.height - 5.677 * profile.age
+        : 447.593 + 9.247 * profile.weight + 3.098 * profile.height - 4.330 * profile.age;
+      const tdee = Math.round(bmr * 1.55);
+
+      const { result, error } = await aiAnalyzeBiomarkers(
+        biomarkers.map(b => ({
+          name: b.name,
+          value: b.value,
+          unit: b.unit,
+          normal_min: b.normalMin,
+          normal_max: b.normalMax,
+          category: b.category,
+        })),
+        { ...profile, tdee, bmr: Math.round(bmr) },
+        language
+      );
+
+      if (error) {
+        setAiError(error);
+      } else if (result) {
+        setAiAnalysis(result);
+      }
+    } catch (e: any) {
+      setAiError(e.message);
+    } finally {
+      setIsAILoading(false);
+    }
+  }, [biomarkers, profile]);
+
+  const regenerateMealPlan = useCallback(async () => {
+    setIsMealLoading(true);
+    try {
+      const results = await Promise.all(
+        Array(7).fill(null).map(() =>
+          generateMealPlanDay(
+            biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit, normal_min: b.normalMin, normal_max: b.normalMax })),
+            { ...profile, tdee: 2200 },
+            'fr'
+          )
+        )
+      );
+
+      const plans = results.map(r => {
+        if (r.result) {
+          const d = r.result;
+          return {
+            totalCalories: d.totalCalories,
+            macros: d.macros,
+            breakfast: { id: 'b', ...d.breakfast },
+            lunch: { id: 'l', ...d.lunch },
+            dinner: { id: 'd', ...d.dinner },
+            snack: { id: 's', ...d.snack },
+          } as MealPlanDay;
+        }
+        return DEFAULT_MEAL_PLAN_DAY;
+      });
+
+      setWeeklyMealPlan(plans);
+      if (user) await saveMealPlan(user.id, plans);
+    } catch (e) {
+      console.error('Meal plan generation failed:', e);
+    } finally {
+      setIsMealLoading(false);
+    }
+  }, [biomarkers, profile, user]);
+
+  const regenerateWorkout = useCallback(async (type: WorkoutSession['type']) => {
+    setIsWorkoutLoading(true);
+    try {
+      const { result, error } = await generateWorkoutSession(profile, type, 'fr');
+      if (result && !error) {
+        const newSession: WorkoutSession = {
+          type: result.type as WorkoutSession['type'],
+          name: result.name,
+          duration: result.duration,
+          scienceTip: result.scienceTip,
+          scienceTipAr: result.scienceTipAr,
+          exercises: result.exercises.map(e => ({
+            id: e.id || Math.random().toString(36),
+            name: e.name,
+            nameAr: e.nameAr,
+            muscleGroup: e.muscleGroup,
+            sets: e.sets,
+            reps: String(e.reps),
+            rest: e.rest,
+            intensity: e.intensity || 'medium',
+            technique: e.technique,
+          })),
+        };
+        setWeeklyWorkout(prev => prev.map(s => s.type === type ? newSession : s));
+        if (user) {
+          await saveWorkout(user.id, {
+            type: newSession.type,
+            name: newSession.name,
+            duration: newSession.duration,
+            exercises: newSession.exercises,
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Workout generation failed:', e);
+    } finally {
+      setIsWorkoutLoading(false);
+    }
+  }, [profile, user]);
+
+  const completeOnboarding = useCallback(async () => {
+    setOnboardingDone(true);
+    if (user) {
+      await saveProfile(user.id, { onboarding_done: true });
+    }
+  }, [user]);
 
   return (
     <HealthContext.Provider value={{
-      profile, updateProfile, biomarkers, updateBiomarkers, addBiomarker,
-      weeklyMealPlan, regenerateMealPlan, weeklyWorkout, regenerateWorkout,
-      healthScore, deficiencies, dailyStats, updateDailyStats,
-      onboardingDone, completeOnboarding,
+      profile, updateProfile,
+      biomarkers, addBiomarker,
+      deficiencies, healthScore,
+      dailyStats, updateDailyStats,
+      weeklyMealPlan, weeklyWorkout,
+      regenerateMealPlan, regenerateWorkout,
+      completeOnboarding, onboardingDone,
+      aiAnalysis, runAIAnalysis, isAILoading, aiError,
+      isMealLoading, isWorkoutLoading, isDataLoading,
     }}>
       {children}
     </HealthContext.Provider>
   );
 }
 
-export { HealthContext };
+export function useHealth() {
+  const ctx = useContext(HealthContext);
+  if (!ctx) throw new Error('useHealth must be used within HealthProvider');
+  return ctx;
+}

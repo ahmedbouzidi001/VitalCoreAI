@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useHealth } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAlert } from '@/template';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { Language } from '@/constants/i18n';
 
@@ -12,8 +15,11 @@ const GOALS = ['muscle_gain', 'fat_loss', 'optimize_hormones', 'longevity', 'end
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { profile, updateProfile, healthScore, biomarkers } = useHealth();
+  const router = useRouter();
+  const { profile, updateProfile, healthScore, biomarkers, deficiencies } = useHealth();
   const { t, language, setLanguage } = useLanguage();
+  const { user, logout } = useAuth();
+  const { showAlert } = useAlert();
   const [editing, setEditing] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
   const [notifications, setNotifications] = useState(true);
@@ -23,12 +29,26 @@ export default function ProfileScreen() {
     setEditing(false);
   };
 
+  const handleLogout = async () => {
+    showAlert('Déconnexion', 'Voulez-vous vous déconnecter ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Déconnexion', style: 'destructive', onPress: async () => {
+          await logout();
+          router.replace('/login');
+        }
+      }
+    ]);
+  };
+
   const bmr = profile.gender === 'male'
     ? 88.362 + 13.397 * profile.weight + 4.799 * profile.height - 5.677 * profile.age
     : 447.593 + 9.247 * profile.weight + 3.098 * profile.height - 4.330 * profile.age;
-  const multipliers = { sedentary: 1.2, light: 1.375, moderate: 1.55, very_active: 1.725, athlete: 1.9 };
-  const tdee = Math.round(bmr * multipliers[profile.activityLevel]);
+  const multipliers: Record<string, number> = { sedentary: 1.2, light: 1.375, moderate: 1.55, very_active: 1.725, athlete: 1.9 };
+  const tdee = Math.round(bmr * (multipliers[profile.activityLevel] || 1.55));
   const bmi = (profile.weight / Math.pow(profile.height / 100, 2)).toFixed(1);
+  const bmiFloat = parseFloat(bmi);
+  const bmiColor = bmiFloat < 18.5 ? Colors.warning : bmiFloat > 25 ? Colors.danger : Colors.success;
 
   const LANGS: Array<{ code: Language; label: string; flag: string }> = [
     { code: 'fr', label: 'Français', flag: '🇫🇷' },
@@ -45,25 +65,42 @@ export default function ProfileScreen() {
     general_health: language === 'ar' ? 'الصحة العامة' : language === 'fr' ? 'Santé générale' : 'General Health',
   };
 
+  const scoreColor = healthScore >= 75 ? Colors.success : healthScore >= 50 ? Colors.warning : Colors.danger;
+  const displayName = user ? user.email?.split('@')[0] || 'Utilisateur' : profile.name;
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
+        {/* Auth Status Banner */}
+        {user ? (
+          <View style={styles.authBanner}>
+            <MaterialIcons name="verified-user" size={16} color={Colors.success} />
+            <Text style={styles.authText}>{user.email}</Text>
+            <View style={styles.syncDot} />
+            <Text style={styles.syncText}>Synchronisé</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.loginBanner} onPress={() => router.push('/login')} activeOpacity={0.8}>
+            <MaterialIcons name="login" size={16} color={Colors.primary} />
+            <Text style={styles.loginBannerText}>Connectez-vous pour synchroniser vos données</Text>
+            <MaterialIcons name="arrow-forward-ios" size={12} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+
         {/* Profile Header */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{profile.name.charAt(0).toUpperCase()}</Text>
+              <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
             </View>
-            <View style={styles.scoreRing}>
+            <View style={[styles.scoreRing, { backgroundColor: scoreColor }]}>
               <Text style={styles.scoreRingText}>{healthScore}</Text>
             </View>
           </View>
-          <Text style={styles.profileName}>{profile.name}</Text>
-          <Text style={styles.profileSub}>
-            {profile.age} {t('age')} · {profile.weight}{t('g').replace('g','kg')} · {profile.height}cm
-          </Text>
+          <Text style={styles.profileName}>{displayName}</Text>
+          <Text style={styles.profileSub}>{profile.age} ans · {profile.weight}kg · {profile.height}cm</Text>
           <View style={styles.profileGoals}>
             {profile.goals.slice(0, 3).map(g => (
               <View key={g} style={styles.goalChip}>
@@ -76,12 +113,13 @@ export default function ProfileScreen() {
         {/* Bio Stats */}
         <View style={styles.bioStatsRow}>
           {[
-            { label: t('bmi'), value: bmi, icon: 'monitor-weight', color: parseFloat(bmi) < 18.5 || parseFloat(bmi) > 25 ? Colors.warning : Colors.success },
-            { label: t('bmr'), value: `${Math.round(bmr)}`, icon: 'whatshot', color: Colors.gold },
-            { label: t('tdee'), value: `${tdee}`, icon: 'local-fire-department', color: Colors.primary },
+            { label: 'IMC', value: bmi, icon: 'monitor-weight', color: bmiColor },
+            { label: 'BMR', value: `${Math.round(bmr)}`, icon: 'whatshot', color: Colors.gold },
+            { label: 'TDEE', value: `${tdee}`, icon: 'local-fire-department', color: Colors.primary },
+            { label: 'Marqueurs', value: `${biomarkers.length}`, icon: 'biotech', color: Colors.success },
           ].map((stat, i) => (
             <View key={i} style={styles.bioStat}>
-              <MaterialIcons name={stat.icon as any} size={20} color={stat.color} />
+              <MaterialIcons name={stat.icon as any} size={18} color={stat.color} />
               <Text style={[styles.bioStatValue, { color: stat.color }]}>{stat.value}</Text>
               <Text style={styles.bioStatLabel}>{stat.label}</Text>
             </View>
@@ -89,13 +127,13 @@ export default function ProfileScreen() {
         </View>
 
         {/* Deficiency Summary */}
-        {biomarkers.filter(b => b.value < b.normalMin).length > 0 && (
+        {deficiencies.length > 0 && (
           <View style={styles.deficiencyCard}>
             <View style={styles.deficiencyHeader}>
               <MaterialIcons name="warning-amber" size={18} color={Colors.warning} />
-              <Text style={styles.deficiencyTitle}>{t('deficiencies_detected')}</Text>
+              <Text style={styles.deficiencyTitle}>{deficiencies.length} carence(s) détectée(s)</Text>
             </View>
-            {biomarkers.filter(b => b.value < b.normalMin).map(b => (
+            {deficiencies.slice(0, 3).map(b => (
               <View key={b.id} style={styles.deficiencyRow}>
                 <Text style={styles.deficiencyName}>{b.name}</Text>
                 <Text style={styles.deficiencyValue}>{b.value} {b.unit}</Text>
@@ -132,8 +170,6 @@ export default function ProfileScreen() {
               )}
             </View>
           ))}
-
-          {/* Gender */}
           <View style={styles.fieldRow}>
             <Text style={styles.fieldLabel}>{t('gender')}</Text>
             {editing ? (
@@ -225,9 +261,7 @@ export default function ProfileScreen() {
           <View style={styles.notifRow}>
             <View style={styles.notifInfo}>
               <Text style={styles.sectionTitle}>{t('notifications')}</Text>
-              <Text style={styles.notifSub}>
-                {language === 'ar' ? 'تنبيهات الوجبات والتدريب' : language === 'fr' ? 'Rappels repas & entraînement' : 'Meal & workout reminders'}
-              </Text>
+              <Text style={styles.notifSub}>Rappels repas, entraînement et analyses</Text>
             </View>
             <Switch
               value={notifications}
@@ -237,6 +271,14 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+
+        {/* Logout */}
+        {user && (
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+            <MaterialIcons name="logout" size={18} color={Colors.danger} />
+            <Text style={styles.logoutText}>Se déconnecter</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 48 }} />
       </ScrollView>
@@ -248,6 +290,22 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   scroll: { paddingHorizontal: Spacing.md },
 
+  authBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.successMuted, borderRadius: Radius.md,
+    padding: 10, marginTop: Spacing.md, marginBottom: Spacing.sm,
+  },
+  authText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary },
+  syncDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
+  syncText: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.semibold },
+  loginBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.primaryMuted, borderRadius: Radius.md,
+    padding: 10, marginTop: Spacing.md, marginBottom: Spacing.sm,
+    borderWidth: 1, borderColor: Colors.primary + '44',
+  },
+  loginBannerText: { flex: 1, fontSize: FontSize.xs, color: Colors.primary },
+
   profileHeader: { alignItems: 'center', paddingVertical: Spacing.lg },
   avatarWrap: { position: 'relative', marginBottom: Spacing.md },
   avatar: {
@@ -258,8 +316,7 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 36, fontWeight: FontWeight.bold, color: Colors.primary },
   scoreRing: {
     position: 'absolute', bottom: -4, right: -4,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.gold, alignItems: 'center', justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: Colors.background,
   },
   scoreRingText: { fontSize: FontSize.xs, fontWeight: FontWeight.extrabold, color: Colors.textInverse },
@@ -274,11 +331,10 @@ const styles = StyleSheet.create({
 
   bioStatsRow: {
     flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.surfaceBorder, marginBottom: Spacing.md,
-    overflow: 'hidden',
+    borderWidth: 1, borderColor: Colors.surfaceBorder, marginBottom: Spacing.md, overflow: 'hidden',
   },
-  bioStat: { flex: 1, alignItems: 'center', padding: Spacing.md, gap: 4 },
-  bioStatValue: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold },
+  bioStat: { flex: 1, alignItems: 'center', padding: Spacing.sm, gap: 4 },
+  bioStatValue: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold },
   bioStatLabel: { fontSize: 10, color: Colors.textMuted, textAlign: 'center' },
 
   deficiencyCard: {
@@ -299,56 +355,44 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
   sectionTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
   editBtn: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.semibold },
-
   fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder },
   fieldLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
   fieldValue: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-  fieldUnit: { fontWeight: FontWeight.regular, color: Colors.textMuted },
+  fieldUnit: { fontWeight: '400', color: Colors.textMuted },
   fieldInput: {
     backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm,
     paddingHorizontal: 12, paddingVertical: 6, color: Colors.textPrimary,
     fontSize: FontSize.sm, minWidth: 80, textAlign: 'right',
   },
   genderPicker: { flexDirection: 'row', gap: 8 },
-  genderChip: {
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  genderChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.full, backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder },
   genderChipActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
   genderChipText: { fontSize: FontSize.xs, color: Colors.textSecondary },
   genderChipTextActive: { color: Colors.primary, fontWeight: FontWeight.semibold },
-
   activityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  activityChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  activityChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder },
   activityChipActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
   activityText: { fontSize: FontSize.xs, color: Colors.textSecondary },
   activityTextActive: { color: Colors.primary, fontWeight: FontWeight.semibold },
-
   goalsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  goalSelectChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  goalSelectChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.full, backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder },
   goalSelectChipActive: { backgroundColor: Colors.primaryMuted, borderColor: Colors.primary },
   goalSelectText: { fontSize: FontSize.xs, color: Colors.textSecondary },
   goalSelectTextActive: { color: Colors.primary, fontWeight: FontWeight.semibold },
-
   langOptions: { gap: 8 },
-  langChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md,
-    padding: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder,
-  },
+  langChip: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
   langChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
   langFlag: { fontSize: 22 },
   langLabel: { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   langLabelActive: { color: Colors.textPrimary },
-
   notifRow: { flexDirection: 'row', alignItems: 'center' },
   notifInfo: { flex: 1 },
   notifSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Colors.dangerMuted, borderRadius: Radius.lg,
+    paddingVertical: 14, marginBottom: Spacing.md,
+    borderWidth: 1, borderColor: Colors.danger + '44',
+  },
+  logoutText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.danger },
 });
