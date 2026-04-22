@@ -41,6 +41,7 @@ export default function NutritionScreen() {
   const { t, language } = useLanguage();
   const [selectedDay, setSelectedDay] = useState(0);
   const goToRecipes = useCallback(() => router.push('/recipes'), [router]);
+  const goToFoodLogger = useCallback(() => router.push('/food-logger'), [router]);
 
   const dayLabels = t('days').split(',');
   const plan = weeklyMealPlan[selectedDay];
@@ -66,10 +67,16 @@ export default function NutritionScreen() {
         <View>
           <View style={styles.titleRow}>
             <Text style={styles.title}>{t('meal_plan')}</Text>
-            <TouchableOpacity style={styles.recipesNavBtn} onPress={goToRecipes} activeOpacity={0.8}>
-              <MaterialIcons name="public" size={14} color={Colors.gold} />
-              <Text style={styles.recipesNavText}>Recettes mondiales</Text>
-            </TouchableOpacity>
+            <View style={styles.navBtns}>
+              <TouchableOpacity style={styles.logFoodBtn} onPress={goToFoodLogger} activeOpacity={0.8}>
+                <MaterialIcons name="add-circle-outline" size={14} color={Colors.success} />
+                <Text style={styles.logFoodText}>{language === 'ar' ? 'سجل طعام' : 'Logger'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.recipesNavBtn} onPress={goToRecipes} activeOpacity={0.8}>
+                <MaterialIcons name="public" size={14} color={Colors.gold} />
+                <Text style={styles.recipesNavText}>Recettes mondiales</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           {deficiencies.length > 0 && (
             <View style={styles.adaptedBadge}>
@@ -220,9 +227,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.md,
   },
-  titleRow: { flex: 1 },
-  title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 4 },
-  recipesNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.goldMuted, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.gold + '44', marginTop: 4 },
+  titleRow: { flex: 1, gap: 4 },
+  title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  navBtns: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
+  logFoodBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.successMuted, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.success + '44' },
+  logFoodText: { fontSize: 10, color: Colors.success, fontWeight: FontWeight.semibold },
+  recipesNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.goldMuted, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.gold + '44' },
   recipesNavText: { fontSize: 10, color: Colors.gold, fontWeight: FontWeight.semibold },
   adaptedBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,

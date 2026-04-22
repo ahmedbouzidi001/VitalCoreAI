@@ -10,6 +10,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import { useAuth } from '@/contexts/AuthContext';
+import { loadWeightHistory, loadHealthScoreHistory } from '@/services/vitalCore';
 
 const { width } = Dimensions.get('window');
 
@@ -190,19 +192,44 @@ export default function AnalysisScreen() {
   const [showInput, setShowInput] = useState(false);
   const [selectedMarkerId, setSelectedMarkerId] = useState(biomarkers[0]?.id || '');
   const [inputValue, setInputValue] = useState('');
+  const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfResult, setPdfResult] = useState<any>(null);
   const [showEvolution, setShowEvolution] = useState(false);
 
-  // Mock 30-day history for chart demo
-  const [weightHistory] = useState(() =>
-    Array.from({ length: 30 }, (_, i) => 78 + Math.sin(i * 0.4) * 1.5 + Math.random() * 0.5)
-  );
-  const [scoreHistory] = useState(() =>
-    Array.from({ length: 14 }, (_, i) => 65 + Math.floor(i * 2.5) + Math.floor(Math.random() * 5))
-  );
+  // Real data from Supabase
+  const [weightHistory, setWeightHistory] = useState<number[]>([]);
+  const [scoreHistory, setScoreHistory] = useState<number[]>([]);
+  const [chartsLoading, setChartsLoading] = useState(false);
+
+  useEffect(() => {
+    loadChartData();
+  }, []);
+
+  const loadChartData = async () => {
+    if (!user) return;
+    setChartsLoading(true);
+    try {
+      const [wRes, sRes] = await Promise.all([
+        loadWeightHistory(user.id, 30),
+        loadHealthScoreHistory(user.id, 14),
+      ]);
+      if (wRes.data && wRes.data.length > 0) {
+        setWeightHistory(wRes.data.map((d: any) => d.weight));
+      } else {
+        setWeightHistory([]);
+      }
+      if (sRes.data && sRes.data.length > 0) {
+        setScoreHistory(sRes.data.map((d: any) => d.score));
+      } else {
+        setScoreHistory([]);
+      }
+    } finally {
+      setChartsLoading(false);
+    }
+  };
 
   const tabs: Array<{ key: 'hormones' | 'vitamins' | 'metabolic'; label: string; icon: string }> = [
     { key: 'hormones', label: t('hormones'), icon: 'water-drop' },
@@ -364,25 +391,37 @@ export default function AnalysisScreen() {
         <View style={styles.evolutionPanel}>
           <View style={styles.chartCard}>
             <Text style={styles.chartTitle}>📉 Évolution du Poids (30 jours)</Text>
-            <View style={styles.chartStats}>
-              <Text style={styles.chartStat}>Actuel: {weightHistory[weightHistory.length - 1].toFixed(1)} kg</Text>
-              <Text style={[styles.chartStat, { color: Colors.success }]}>
-                {weightHistory[0] > weightHistory[weightHistory.length - 1] ? '↓' : '↑'}
-                {Math.abs(weightHistory[0] - weightHistory[weightHistory.length - 1]).toFixed(1)} kg
-              </Text>
-            </View>
-            <MiniLineChart data={weightHistory} color={Colors.primary} height={80} />
+            {weightHistory.length > 1 ? (
+              <>
+                <View style={styles.chartStats}>
+                  <Text style={styles.chartStat}>Actuel: {weightHistory[weightHistory.length - 1].toFixed(1)} kg</Text>
+                  <Text style={[styles.chartStat, { color: weightHistory[0] > weightHistory[weightHistory.length - 1] ? Colors.success : Colors.warning }]}>
+                    {weightHistory[0] > weightHistory[weightHistory.length - 1] ? '↓' : '↑'}
+                    {Math.abs(weightHistory[0] - weightHistory[weightHistory.length - 1]).toFixed(1)} kg
+                  </Text>
+                </View>
+                <MiniLineChart data={weightHistory} color={Colors.primary} height={80} />
+              </>
+            ) : (
+              <Text style={styles.chartEmpty}>Enregistrez votre poids dans le profil pour voir l'évolution</Text>
+            )}
           </View>
 
           <View style={styles.chartCard}>
             <Text style={styles.chartTitle}>💚 Score de Santé (14 jours)</Text>
-            <View style={styles.chartStats}>
-              <Text style={styles.chartStat}>Actuel: {scoreHistory[scoreHistory.length - 1]}/100</Text>
-              <Text style={[styles.chartStat, { color: Colors.success }]}>
-                +{scoreHistory[scoreHistory.length - 1] - scoreHistory[0]} pts
-              </Text>
-            </View>
-            <MiniLineChart data={scoreHistory} color={Colors.success} height={60} />
+            {scoreHistory.length > 1 ? (
+              <>
+                <View style={styles.chartStats}>
+                  <Text style={styles.chartStat}>Actuel: {scoreHistory[scoreHistory.length - 1]}/100</Text>
+                  <Text style={[styles.chartStat, { color: Colors.success }]}>
+                    {scoreHistory[scoreHistory.length - 1] >= scoreHistory[0] ? '+' : ''}{scoreHistory[scoreHistory.length - 1] - scoreHistory[0]} pts
+                  </Text>
+                </View>
+                <MiniLineChart data={scoreHistory} color={Colors.success} height={60} />
+              </>
+            ) : (
+              <Text style={styles.chartEmpty}>Lancez des analyses IA pour historiser votre score santé</Text>
+            )}
           </View>
 
           {/* Biomarker trend */}
@@ -533,6 +572,7 @@ const styles = StyleSheet.create({
   chartTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 8 },
   chartStats: { flexDirection: 'row', gap: 16, marginBottom: 4 },
   chartStat: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
+  chartEmpty: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'center', paddingVertical: 16 },
   bioTrendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
   bioTrendItem: { alignItems: 'center', minWidth: 70 },
   bioTrendName: { fontSize: 10, color: Colors.textMuted, fontWeight: FontWeight.semibold },

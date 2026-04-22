@@ -194,8 +194,21 @@ export default function DashboardScreen() {
           {aiError && <Text style={styles.aiErrorText}>{aiError}</Text>}
         </View>
 
-        {/* Daily Stats */}
-        <Text style={styles.sectionTitle}>{t('today_summary')}</Text>
+        {/* Quick Actions Row */}
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/food-logger')} activeOpacity={0.85}>
+            <MaterialIcons name="add-circle" size={20} color={Colors.success} />
+            <Text style={styles.quickActionText}>{language === 'ar' ? 'سجل طعام' : 'Logger repas'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/achievements')} activeOpacity={0.85}>
+            <MaterialIcons name="emoji-events" size={20} color={Colors.gold} />
+            <Text style={styles.quickActionText}>{language === 'ar' ? 'إنجازاتي' : 'Mes succès'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/recipes')} activeOpacity={0.85}>
+            <MaterialIcons name="public" size={20} color={Colors.primary} />
+            <Text style={styles.quickActionText}>{language === 'ar' ? 'وصفات' : 'Recettes'}</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.statsGrid}>
           {[
             {
@@ -416,6 +429,9 @@ const styles = StyleSheet.create({
   analyzeNowText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
   aiErrorText: { fontSize: FontSize.xs, color: Colors.danger, marginTop: 8, textAlign: 'center' },
 
+  quickActionsRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.md },
+  quickAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.surface, borderRadius: Radius.md, paddingVertical: 12, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  quickActionText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
   viewAll: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.medium },

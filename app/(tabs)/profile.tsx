@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, Switch } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, Switch, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -9,6 +9,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAlert } from '@/template';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
 import { Language } from '@/constants/i18n';
+import { enableAllNotifications, cancelAllNotifications } from '@/services/notifications';
+import { loadStreaks, getXPLevel } from '@/services/gamification';
 
 const ACTIVITY_LEVELS = ['sedentary', 'light', 'moderate', 'very_active', 'athlete'] as const;
 const GOALS = ['muscle_gain', 'fat_loss', 'optimize_hormones', 'longevity', 'endurance', 'general_health'];
@@ -22,7 +24,32 @@ export default function ProfileScreen() {
   const { showAlert } = useAlert();
   const [editing, setEditing] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
-  const [notifications, setNotifications] = useState(true);
+  const [notifications, setNotifications] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [userXP, setUserXP] = useState(0);
+
+  useEffect(() => {
+    if (user) {
+      loadStreaks(user.id).then(s => setUserXP(s.xp));
+    }
+  }, [user?.id]);
+
+  const levelData = getXPLevel(userXP);
+
+  const handleToggleNotifications = async (value: boolean) => {
+    setNotifLoading(true);
+    if (value) {
+      const ok = await enableAllNotifications(language);
+      setNotifications(ok);
+      if (!ok) {
+        showAlert('Permission requise', 'Activez les notifications dans les paramètres de votre appareil.');
+      }
+    } else {
+      await cancelAllNotifications();
+      setNotifications(false);
+    }
+    setNotifLoading(false);
+  };
 
   const handleSave = () => {
     updateProfile(localProfile);
@@ -89,7 +116,19 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Profile Header */}
+        {/* XP & Achievements Banner */}
+        <TouchableOpacity style={styles.xpBanner} onPress={() => router.push('/achievements')} activeOpacity={0.85}>
+          <View style={styles.xpBannerLeft}>
+            <Text style={styles.xpBannerIcon}>⭐</Text>
+            <View>
+              <Text style={styles.xpBannerTitle}>{userXP} XP · Niveau {levelData.level} — {levelData.title}</Text>
+              <View style={styles.xpBannerBar}>
+                <View style={[styles.xpBannerFill, { width: `${levelData.progress * 100}%` }]} />
+              </View>
+            </View>
+          </View>
+          <MaterialIcons name="arrow-forward-ios" size={14} color={Colors.gold} />
+        </TouchableOpacity>
         <View style={styles.profileHeader}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
@@ -261,14 +300,17 @@ export default function ProfileScreen() {
           <View style={styles.notifRow}>
             <View style={styles.notifInfo}>
               <Text style={styles.sectionTitle}>{t('notifications')}</Text>
-              <Text style={styles.notifSub}>Rappels repas, entraînement et analyses</Text>
+              <Text style={styles.notifSub}>Eau, repas, entraînement, sommeil</Text>
             </View>
-            <Switch
-              value={notifications}
-              onValueChange={setNotifications}
-              trackColor={{ false: Colors.surfaceBorder, true: Colors.primary }}
-              thumbColor={Colors.textPrimary}
-            />
+            {notifLoading
+              ? <ActivityIndicator size="small" color={Colors.primary} />
+              : <Switch
+                value={notifications}
+                onValueChange={handleToggleNotifications}
+                trackColor={{ false: Colors.surfaceBorder, true: Colors.primary }}
+                thumbColor={Colors.textPrimary}
+              />
+            }
           </View>
         </View>
 
@@ -306,6 +348,12 @@ const styles = StyleSheet.create({
   },
   loginBannerText: { flex: 1, fontSize: FontSize.xs, color: Colors.primary },
 
+  xpBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.gold + '44' },
+  xpBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  xpBannerIcon: { fontSize: 28 },
+  xpBannerTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.gold, marginBottom: 6 },
+  xpBannerBar: { height: 4, backgroundColor: Colors.surfaceBorder, borderRadius: 2, overflow: 'hidden', width: 160 },
+  xpBannerFill: { height: '100%', backgroundColor: Colors.gold, borderRadius: 2 },
   profileHeader: { alignItems: 'center', paddingVertical: Spacing.lg },
   avatarWrap: { position: 'relative', marginBottom: Spacing.md },
   avatar: {
