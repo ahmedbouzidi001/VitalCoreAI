@@ -20,6 +20,8 @@ export default function RootLayout() {
                 <Stack.Screen name="recipes" options={{ presentation: 'modal', headerShown: false }} />
                 <Stack.Screen name="food-logger" options={{ presentation: 'modal', headerShown: false }} />
                 <Stack.Screen name="achievements" options={{ presentation: 'card', headerShown: false }} />
+                <Stack.Screen name="chat" options={{ headerShown: false }} />
+                <Stack.Screen name="weight-tracker" options={{ headerShown: false }} />
               </Stack>
             </HealthProvider>
           </AuthProvider>

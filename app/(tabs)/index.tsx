@@ -200,13 +200,17 @@ export default function DashboardScreen() {
             <MaterialIcons name="add-circle" size={20} color={Colors.success} />
             <Text style={styles.quickActionText}>{language === 'ar' ? 'سجل طعام' : 'Logger repas'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/achievements')} activeOpacity={0.85}>
-            <MaterialIcons name="emoji-events" size={20} color={Colors.gold} />
-            <Text style={styles.quickActionText}>{language === 'ar' ? 'إنجازاتي' : 'Mes succès'}</Text>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+            <MaterialIcons name="psychology" size={20} color={Colors.primary} />
+            <Text style={styles.quickActionText}>{language === 'ar' ? 'الذكاء الاصطناعي' : 'Chat IA'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/recipes')} activeOpacity={0.85}>
-            <MaterialIcons name="public" size={20} color={Colors.primary} />
-            <Text style={styles.quickActionText}>{language === 'ar' ? 'وصفات' : 'Recettes'}</Text>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/weight-tracker')} activeOpacity={0.85}>
+            <MaterialIcons name="monitor-weight" size={20} color={Colors.gold} />
+            <Text style={styles.quickActionText}>{language === 'ar' ? 'الوزن' : 'Poids'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickAction} onPress={() => router.push('/achievements')} activeOpacity={0.85}>
+            <MaterialIcons name="emoji-events" size={20} color={Colors.purple} />
+            <Text style={styles.quickActionText}>{language === 'ar' ? 'إنجازات' : 'Succès'}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.statsGrid}>
@@ -429,9 +433,9 @@ const styles = StyleSheet.create({
   analyzeNowText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
   aiErrorText: { fontSize: FontSize.xs, color: Colors.danger, marginTop: 8, textAlign: 'center' },
 
-  quickActionsRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.md },
-  quickAction: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.surface, borderRadius: Radius.md, paddingVertical: 12, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  quickActionText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
+  quickActionsRow: { flexDirection: 'row', gap: 6, marginBottom: Spacing.md, flexWrap: 'wrap' },
+  quickAction: { flex: 1, minWidth: '22%', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: Colors.surface, borderRadius: Radius.md, paddingVertical: 10, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  quickActionText: { fontSize: 9, color: Colors.textSecondary, fontWeight: FontWeight.medium, textAlign: 'center' },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
   viewAll: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.medium },

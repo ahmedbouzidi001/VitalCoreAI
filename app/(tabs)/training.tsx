@@ -2,13 +2,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar,
-  ActivityIndicator, Vibration, Platform,
+  ActivityIndicator, Vibration, Platform, TextInput, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useHealth, WorkoutSession } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAuth } from '@/contexts/AuthContext';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import { supabase } from '@/services/supabase';
+import { addXP } from '@/services/gamification';
+import { useRouter } from 'expo-router';
 
 const TYPE_CONFIG: Record<string, { color: string; icon: string; gradient: string }> = {
   hypertrophy: { color: Colors.primary, icon: 'fitness-center', gradient: Colors.primaryMuted },
@@ -34,6 +38,69 @@ const WORKOUT_TYPES: Array<{ key: WorkoutSession['type']; label: string; labelFr
   { key: 'longevity', label: 'Longévité', labelFr: 'Longévité' },
 ];
 
+// ---- Weight Input Modal ----
+function WeightInputModal({
+  visible, exerciseName, setNum, previousWeight, onConfirm, onSkip, color, isAr,
+}: {
+  visible: boolean; exerciseName: string; setNum: number; previousWeight: number | null;
+  onConfirm: (weight: number, reps: number) => void; onSkip: () => void; color: string; isAr: boolean;
+}) {
+  const [weight, setWeight] = useState(previousWeight ? String(previousWeight) : '');
+  const [reps, setReps] = useState('10');
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onSkip}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.lg, paddingBottom: 40 }}>
+          <Text style={{ fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 4 }}>
+            {exerciseName}
+          </Text>
+          <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: Spacing.md }}>
+            {isAr ? `الجلسة ${setNum}` : `Série ${setNum}`} {previousWeight ? `· ${isAr ? 'السابق' : 'Précédent'}: ${previousWeight}kg` : ''}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: Spacing.md }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 6 }}>{isAr ? 'الوزن (كغ)' : 'Poids (kg)'}</Text>
+              <TextInput
+                style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm, padding: 12, color: Colors.textPrimary, fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center', borderWidth: 1, borderColor: color + '44' }}
+                value={weight}
+                onChangeText={setWeight}
+                keyboardType="decimal-pad"
+                placeholder="0"
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 6 }}>{isAr ? 'التكرارات' : 'Répétitions'}</Text>
+              <TextInput
+                style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm, padding: 12, color: Colors.textPrimary, fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
+                value={reps}
+                onChangeText={setReps}
+                keyboardType="number-pad"
+              />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={{ backgroundColor: color, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', marginBottom: 8 }}
+            onPress={() => {
+              const w = parseFloat(weight) || 0;
+              const r = parseInt(reps) || 10;
+              onConfirm(w, r);
+            }}
+          >
+            <Text style={{ fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse }}>
+              {isAr ? 'تأكيد الجلسة ✓' : 'Confirmer la série ✓'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 10 }}>
+            <Text style={{ fontSize: FontSize.sm, color: Colors.textMuted }}>{isAr ? 'تخطي' : 'Passer'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ---- Advanced Timer Component ----
 function AdvancedTimer({
   exercises,
@@ -42,18 +109,27 @@ function AdvancedTimer({
   onFinish,
   onSetComplete,
   color,
+  workoutId,
+  userId,
+  isAr,
 }: {
   exercises: any[];
   currentExerciseIdx: number;
   onExerciseComplete: (idx: number) => void;
-  onFinish: (totalTime: number) => void;
+  onFinish: (totalTime: number, logs: any[]) => void;
   onSetComplete: (exerciseIdx: number, setIdx: number) => void;
   color: string;
+  workoutId: string;
+  userId: string | null;
+  isAr: boolean;
 }) {
   const [phase, setPhase] = useState<'work' | 'rest' | 'done'>('work');
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [restSeconds, setRestSeconds] = useState(0);
   const [currentSet, setCurrentSet] = useState(1);
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [allSetLogs, setAllSetLogs] = useState<any[]>([]);
+  const [previousWeights, setPreviousWeights] = useState<Record<string, number | null>>({});
   const totalInterval = useRef<any>(null);
   const restInterval = useRef<any>(null);
 
@@ -93,6 +169,30 @@ function AdvancedTimer({
   };
 
   const handleSetDone = () => {
+    // Show weight input modal before logging the set
+    setShowWeightModal(true);
+  };
+
+  const handleWeightConfirm = async (weight: number, reps: number) => {
+    setShowWeightModal(false);
+    const log = {
+      workout_id: workoutId,
+      exercise_id: exercise?.id || 'unknown',
+      exercise_name: exercise?.name || '',
+      set_number: currentSet,
+      reps,
+      weight_kg: weight,
+      date: new Date().toISOString().split('T')[0],
+    };
+    const newLogs = [...allSetLogs, log];
+    setAllSetLogs(newLogs);
+    if (userId) {
+      supabase.from('workout_logs').insert({ user_id: userId, ...log }).catch(console.error);
+      addXP(userId, 'complete_workout').catch(console.error);
+    }
+    // Track previous weight for this exercise
+    setPreviousWeights(prev => ({ ...prev, [exercise?.id]: weight }));
+
     onSetComplete(currentExerciseIdx, currentSet);
     Vibration.vibrate(200);
     if (currentSet >= totalSets) {
@@ -101,7 +201,7 @@ function AdvancedTimer({
       if (currentExerciseIdx >= exercises.length - 1) {
         clearInterval(totalInterval.current);
         setPhase('done');
-        onFinish(totalSeconds);
+        onFinish(totalSeconds, newLogs);
       } else {
         setPhase('rest');
       }
@@ -111,51 +211,93 @@ function AdvancedTimer({
     }
   };
 
+  const handleWeightSkip = () => {
+    setShowWeightModal(false);
+    handleWeightConfirm(0, parseInt(exercise?.reps) || 10);
+  };
+
+  const volumeKg = allSetLogs.reduce((sum, l) => sum + (l.weight_kg * l.reps), 0);
+
   if (phase === 'done') {
     return (
       <View style={timerStyles.doneCard}>
         <Text style={timerStyles.doneIcon}>🏆</Text>
-        <Text style={timerStyles.doneTitle}>Séance Terminée !</Text>
-        <Text style={timerStyles.doneTime}>Temps total: {formatTime(totalSeconds)}</Text>
+        <Text style={timerStyles.doneTitle}>{isAr ? 'انتهت الجلسة!' : 'Séance Terminée !'}</Text>
+        <Text style={timerStyles.doneTime}>{isAr ? 'الوقت الكلي' : 'Temps total'}: {formatTime(totalSeconds)}</Text>
+        {volumeKg > 0 && (
+          <View style={timerStyles.volumeBox}>
+            <Text style={timerStyles.volumeLabel}>{isAr ? 'الحجم الكلي' : 'Volume total'}</Text>
+            <Text style={timerStyles.volumeVal}>{volumeKg.toFixed(0)} kg</Text>
+          </View>
+        )}
+        {allSetLogs.length > 0 && (
+          <ScrollView style={{ maxHeight: 160, width: '100%' }} showsVerticalScrollIndicator={false}>
+            {allSetLogs.map((l, i) => (
+              <View key={i} style={timerStyles.logRow}>
+                <Text style={timerStyles.logEx} numberOfLines={1}>{l.exercise_name}</Text>
+                <Text style={timerStyles.logDetail}>S{l.set_number} · {l.reps} reps{l.weight_kg > 0 ? ` · ${l.weight_kg}kg` : ''}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
       </View>
     );
   }
 
   return (
     <View style={[timerStyles.container, { borderColor: color + '44' }]}>
+      <WeightInputModal
+        visible={showWeightModal}
+        exerciseName={exercise?.name || ''}
+        setNum={currentSet}
+        previousWeight={previousWeights[exercise?.id] ?? null}
+        onConfirm={handleWeightConfirm}
+        onSkip={handleWeightSkip}
+        color={color}
+        isAr={isAr}
+      />
       {/* Total elapsed */}
       <View style={timerStyles.totalRow}>
         <MaterialIcons name="timer" size={14} color={Colors.textMuted} />
         <Text style={timerStyles.totalTime}>{formatTime(totalSeconds)}</Text>
+        {volumeKg > 0 && <Text style={timerStyles.volumeInline}>· {volumeKg.toFixed(0)}kg volume</Text>}
       </View>
 
       {phase === 'rest' ? (
-        // REST PHASE
         <View style={timerStyles.restPhase}>
-          <Text style={timerStyles.phaseLabel}>⏸ REPOS</Text>
+          <Text style={timerStyles.phaseLabel}>{isAr ? '⏸ راحة' : '⏸ REPOS'}</Text>
           <Text style={[timerStyles.countdownBig, { color: Colors.warning }]}>{formatTime(restSeconds)}</Text>
-          <Text style={timerStyles.nextLabel}>Prochain: Série {currentSet + 1}/{totalSets}</Text>
+          <Text style={timerStyles.nextLabel}>{isAr ? `الجلسة القادمة: ${currentSet + 1}/${totalSets}` : `Prochain: Série ${currentSet + 1}/${totalSets}`}</Text>
           <TouchableOpacity style={timerStyles.skipRestBtn} onPress={() => { clearInterval(restInterval.current); setPhase('work'); }}>
-            <Text style={timerStyles.skipRestText}>Passer le repos →</Text>
+            <Text style={timerStyles.skipRestText}>{isAr ? 'تخطي الراحة →' : 'Passer le repos →'}</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        // WORK PHASE
         <View style={timerStyles.workPhase}>
-          <Text style={[timerStyles.phaseLabel, { color }]}>💪 EN COURS</Text>
+          <Text style={[timerStyles.phaseLabel, { color }]}>{isAr ? '💪 جاري التدريب' : '💪 EN COURS'}</Text>
           <Text style={timerStyles.exerciseName} numberOfLines={1}>{exercise?.name}</Text>
           <View style={timerStyles.setsRow}>
             {Array.from({ length: totalSets }).map((_, i) => (
               <View key={i} style={[timerStyles.setDot, i < currentSet - 1 && { backgroundColor: Colors.success }, i === currentSet - 1 && { backgroundColor: color }]} />
             ))}
           </View>
-          <Text style={timerStyles.setLabel}>Série {currentSet} / {totalSets}  ·  {exercise?.reps} reps</Text>
+          <Text style={timerStyles.setLabel}>
+            {isAr ? `الجلسة ${currentSet} / ${totalSets} · ${exercise?.reps} تكرار` : `Série ${currentSet} / ${totalSets}  ·  ${exercise?.reps} reps`}
+          </Text>
+          {previousWeights[exercise?.id] && (
+            <View style={timerStyles.prevWeightRow}>
+              <MaterialIcons name="history" size={12} color={Colors.textMuted} />
+              <Text style={timerStyles.prevWeightText}>
+                {isAr ? `السابق: ${previousWeights[exercise?.id]}kg` : `Précédent: ${previousWeights[exercise?.id]}kg`}
+              </Text>
+            </View>
+          )}
           {exercise?.technique && (
             <Text style={timerStyles.techniqueText}>{exercise.technique}</Text>
           )}
           <TouchableOpacity style={[timerStyles.doneSetBtn, { backgroundColor: color }]} onPress={handleSetDone} activeOpacity={0.85}>
             <MaterialIcons name="check" size={20} color={Colors.textInverse} />
-            <Text style={timerStyles.doneSetText}>Série terminée</Text>
+            <Text style={timerStyles.doneSetText}>{isAr ? 'انتهت الجلسة' : 'Série terminée'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -185,16 +327,28 @@ const timerStyles = StyleSheet.create({
   techniqueText: { fontSize: FontSize.xs, color: Colors.primary, fontStyle: 'italic', textAlign: 'center', lineHeight: 16 },
   doneSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.md, paddingVertical: 14, marginTop: 4 },
   doneSetText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
-  doneCard: { alignItems: 'center', padding: Spacing.xl, gap: 12 },
+  doneCard: { alignItems: 'center', padding: Spacing.xl, gap: 12, width: '100%' },
   doneIcon: { fontSize: 48 },
   doneTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.gold },
   doneTime: { fontSize: FontSize.md, color: Colors.textSecondary },
+  volumeBox: { backgroundColor: Colors.goldMuted, borderRadius: Radius.md, paddingHorizontal: 20, paddingVertical: 8, alignItems: 'center', borderWidth: 1, borderColor: Colors.gold + '44' },
+  volumeLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
+  volumeVal: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.gold },
+  logRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: 8 },
+  logEx: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary },
+  logDetail: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.semibold },
+  volumeInline: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.semibold },
+  prevWeightRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  prevWeightText: { fontSize: FontSize.xs, color: Colors.textMuted },
 });
 
 export default function TrainingScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { weeklyWorkout, regenerateWorkout, profile, isWorkoutLoading } = useHealth();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const isAr = language === 'ar';
   const [selectedDay, setSelectedDay] = useState(0);
   const [activeType, setActiveType] = useState<WorkoutSession['type']>('hypertrophy');
   const [activeSplit, setActiveSplit] = useState<string>('upper_lower');
@@ -202,8 +356,9 @@ export default function TrainingScreen() {
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState(0);
   const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set());
   const [completedSets, setCompletedSets] = useState<Record<string, number[]>>({});
-  const [workoutSummary, setWorkoutSummary] = useState<{ totalTime: number } | null>(null);
+  const [workoutSummary, setWorkoutSummary] = useState<{ totalTime: number; logs: any[]; volumeKg: number } | null>(null);
   const [showSplitPicker, setShowSplitPicker] = useState(false);
+  const [workoutId] = useState(() => `workout_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
   const session = weeklyWorkout[selectedDay];
   const dayLabels = t('days').split(',');
@@ -226,9 +381,11 @@ export default function TrainingScreen() {
     }));
   };
 
-  const handleFinish = (totalTime: number) => {
+  const handleFinish = (totalTime: number, logs: any[]) => {
     setWorkoutRunning(false);
-    setWorkoutSummary({ totalTime });
+    const vol = logs.reduce((sum, l) => sum + (l.weight_kg || 0) * (l.reps || 0), 0);
+    setWorkoutSummary({ totalTime, logs, volumeKg: vol });
+    if (user) addXP(user.id, 'complete_workout').catch(console.error);
   };
 
   const startWorkout = () => {
@@ -407,12 +564,15 @@ export default function TrainingScreen() {
             {/* Workout Summary */}
             {workoutSummary && (
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>🏆 Séance terminée !</Text>
+                <Text style={styles.summaryTitle}>🏆 {isAr ? 'انتهت الجلسة!' : 'Séance terminée !'}</Text>
                 <Text style={styles.summaryDetail}>
-                  {completedExercises.size}/{session.exercises.length} exercices · {Math.floor(workoutSummary.totalTime / 60)}:{String(workoutSummary.totalTime % 60).padStart(2, '0')} min
+                  {completedExercises.size}/{session.exercises.length} {isAr ? 'تمرين' : 'exercices'} · {Math.floor(workoutSummary.totalTime / 60)}:{String(workoutSummary.totalTime % 60).padStart(2, '0')} min
                 </Text>
+                {workoutSummary.volumeKg > 0 && (
+                  <Text style={styles.summaryVolume}>{isAr ? 'الحجم الكلي' : 'Volume'}: {workoutSummary.volumeKg.toFixed(0)} kg</Text>
+                )}
                 <TouchableOpacity style={styles.newSessionBtn} onPress={startWorkout} activeOpacity={0.8}>
-                  <Text style={styles.newSessionText}>Recommencer</Text>
+                  <Text style={styles.newSessionText}>{isAr ? 'إعادة التدريب' : 'Recommencer'}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -426,6 +586,9 @@ export default function TrainingScreen() {
                 onFinish={handleFinish}
                 onSetComplete={handleSetComplete}
                 color={cfg.color}
+                workoutId={workoutId}
+                userId={user?.id || null}
+                isAr={isAr}
               />
             )}
 
@@ -588,6 +751,7 @@ const styles = StyleSheet.create({
   summaryCard: { backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '44', alignItems: 'center', gap: 8 },
   summaryTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.gold },
   summaryDetail: { fontSize: FontSize.sm, color: Colors.textSecondary },
+  summaryVolume: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
   newSessionBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: 20, paddingVertical: 10 },
   newSessionText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, Switch, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +12,8 @@ import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme
 import { Language } from '@/constants/i18n';
 import { enableAllNotifications, cancelAllNotifications } from '@/services/notifications';
 import { loadStreaks, getXPLevel } from '@/services/gamification';
+import { generateHealthReportPDF } from '@/services/pdfReport';
+// import { useAlert } from '@/template'; // Duplicate import, removed
 
 const ACTIVITY_LEVELS = ['sedentary', 'light', 'moderate', 'very_active', 'athlete'] as const;
 const GOALS = ['muscle_gain', 'fat_loss', 'optimize_hormones', 'longevity', 'endurance', 'general_health'];
@@ -27,6 +30,7 @@ export default function ProfileScreen() {
   const [notifications, setNotifications] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
   const [userXP, setUserXP] = useState(0);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -54,6 +58,22 @@ export default function ProfileScreen() {
   const handleSave = () => {
     updateProfile(localProfile);
     setEditing(false);
+  };
+
+  const handleExportPDF = async () => {
+    setExportingPDF(true);
+    const { success, error } = await generateHealthReportPDF({
+      userName: displayName,
+      date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
+      healthScore,
+      profile,
+      biomarkers,
+      deficiencies: deficiencies.map(d => d.name),
+      dailyStats: { calories: 0, water: 0, steps: 0, sleep: 0 },
+      aiSummary: undefined,
+    });
+    setExportingPDF(false);
+    if (!success) showAlert('Erreur', error || 'Export PDF échoué');
   };
 
   const handleLogout = async () => {
@@ -147,6 +167,25 @@ export default function ProfileScreen() {
               </View>
             ))}
           </View>
+        </View>
+
+        {/* Chat IA + Weight Tracker buttons */}
+        <View style={styles.actionBtnsRow}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+            <MaterialIcons name="psychology" size={18} color={Colors.primary} />
+            <Text style={styles.actionBtnText}>{language === 'ar' ? 'ذكاء اصطناعي' : 'Chat IA'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { borderColor: Colors.gold + '44', backgroundColor: Colors.goldMuted }]} onPress={() => router.push('/weight-tracker')} activeOpacity={0.85}>
+            <MaterialIcons name="monitor-weight" size={18} color={Colors.gold} />
+            <Text style={[styles.actionBtnText, { color: Colors.gold }]}>{language === 'ar' ? 'متابعة الوزن' : 'Suivi poids'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { borderColor: Colors.success + '44', backgroundColor: Colors.successMuted }]} onPress={handleExportPDF} disabled={exportingPDF} activeOpacity={0.85}>
+            {exportingPDF
+              ? <ActivityIndicator size="small" color={Colors.success} />
+              : <MaterialIcons name="picture-as-pdf" size={18} color={Colors.success} />
+            }
+            <Text style={[styles.actionBtnText, { color: Colors.success }]}>Export PDF</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Bio Stats */}
@@ -433,6 +472,9 @@ const styles = StyleSheet.create({
   langFlag: { fontSize: 22 },
   langLabel: { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   langLabelActive: { color: Colors.textPrimary },
+  actionBtnsRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.md },
+  actionBtn: { flex: 1, flexDirection: 'column', alignItems: 'center', gap: 4, backgroundColor: Colors.primaryMuted, borderRadius: Radius.md, paddingVertical: 12, borderWidth: 1, borderColor: Colors.primary + '44' },
+  actionBtnText: { fontSize: 10, color: Colors.primary, fontWeight: FontWeight.semibold, textAlign: 'center' },
   notifRow: { flexDirection: 'row', alignItems: 'center' },
   notifInfo: { flex: 1 },
   notifSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
