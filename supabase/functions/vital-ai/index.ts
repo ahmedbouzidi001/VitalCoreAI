@@ -8,54 +8,67 @@ const corsHeaders = {
 };
 
 // --- Direct Gemini API via Google AI Studio ---
-async function callGemini(systemPrompt: string, userPrompt: string, jsonMode = true): Promise<string> {
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
-  const useOnspaceAI = !apiKey || apiKey.trim() === "";
-
-  if (useOnspaceAI) {
-    // Fallback: OnSpace AI proxy (OpenAI-compatible)
-    const baseUrl = Deno.env.get("ONSPACE_AI_BASE_URL") || "https://ai.onspace.ai/v1";
-    const onspaceKey = Deno.env.get("ONSPACE_AI_API_KEY") || "";
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${onspaceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-        temperature: 0.7, max_tokens: 4096,
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-    });
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || "";
-  }
-
-  // Primary: Direct Gemini API
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  
-  const generationConfig: any = { temperature: 0.7, maxOutputTokens: 4096 };
-  if (jsonMode) generationConfig.responseMimeType = "application/json";
-
-  const body = {
-    contents: [
-      { role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }
-    ],
-    generationConfig,
-  };
-
-  const res = await fetch(url, {
+async function callOnspaceAI(systemPrompt: string, userPrompt: string, jsonMode: boolean): Promise<string> {
+  const baseUrl = Deno.env.get("ONSPACE_AI_BASE_URL") || "https://ai.onspace.ai/v1";
+  const onspaceKey = Deno.env.get("ONSPACE_AI_API_KEY") || "";
+  const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: { "Authorization": `Bearer ${onspaceKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+      temperature: 0.7, max_tokens: 4096,
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+    }),
   });
-
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Gemini API error ${res.status}: ${errText}`);
+    throw new Error(`OnSpace AI error ${res.status}: ${errText}`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
+async function callGemini(systemPrompt: string, userPrompt: string, jsonMode = true): Promise<string> {
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+
+  // Try direct Gemini API if key is present
+  if (apiKey && apiKey.trim() !== "") {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const generationConfig: any = { temperature: 0.7, maxOutputTokens: 4096 };
+    if (jsonMode) generationConfig.responseMimeType = "application/json";
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+        generationConfig,
+      }),
+    });
+
+    // On rate-limit (429) or quota error, fall through to OnSpace AI
+    if (res.status === 429 || res.status === 503) {
+      console.warn(`[vital-ai] Gemini API quota/rate-limit (${res.status}), falling back to OnSpace AI`);
+      return callOnspaceAI(systemPrompt, userPrompt, jsonMode);
+    }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      // If quota exhausted (RESOURCE_EXHAUSTED), fall back silently
+      if (errText.includes("RESOURCE_EXHAUSTED") || errText.includes("quota")) {
+        console.warn("[vital-ai] Gemini quota exhausted, falling back to OnSpace AI");
+        return callOnspaceAI(systemPrompt, userPrompt, jsonMode);
+      }
+      throw new Error(`Gemini API error ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
 
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  // No Gemini key — use OnSpace AI directly
+  return callOnspaceAI(systemPrompt, userPrompt, jsonMode);
 }
 
 function cleanJSON(raw: string): any {
