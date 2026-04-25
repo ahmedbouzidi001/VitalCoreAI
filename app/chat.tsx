@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHealth } from '@/hooks/useHealth';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { addXP } from '@/services/gamification';
@@ -321,8 +321,9 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   aiAvatarLarge: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    ...Shadow.primary,
   },
   headerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   headerStatus: { fontSize: FontSize.xs, color: Colors.textMuted },
@@ -352,13 +353,15 @@ const styles = StyleSheet.create({
   },
   bubbleUser: {
     backgroundColor: Colors.primary,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
+    ...Shadow.primary,
   },
   bubbleAI: {
-    backgroundColor: Colors.surface,
-    borderBottomLeftRadius: 4,
+    backgroundColor: Colors.surfaceElevated,
+    borderBottomLeftRadius: 6,
     borderWidth: 1,
     borderColor: Colors.surfaceBorder,
+    ...Shadow.sm,
   },
   bubbleText: { fontSize: FontSize.sm, lineHeight: 20 },
   bubbleTextUser: { color: Colors.textInverse },
@@ -384,15 +387,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   input: {
-    flex: 1, backgroundColor: Colors.surface, borderRadius: 22,
+    flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: 22,
     paddingHorizontal: 16, paddingVertical: 10, paddingTop: 10,
     color: Colors.textPrimary, fontSize: FontSize.sm,
-    maxHeight: 100, borderWidth: 1, borderColor: Colors.surfaceBorder,
+    maxHeight: 100, borderWidth: 1.5, borderColor: Colors.surfaceBorder,
     lineHeight: 20,
   },
   sendBtn: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 46, height: 46, borderRadius: 23,
     backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    ...Shadow.primary,
   },
   sendBtnDisabled: { backgroundColor: Colors.textMuted },
 });

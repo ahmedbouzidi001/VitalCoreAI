@@ -8,7 +8,7 @@ import { useHealth } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAlert } from '@/template';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import { Language } from '@/constants/i18n';
 import { enableAllNotifications, cancelAllNotifications } from '@/services/notifications';
 import { loadStreaks, getXPLevel } from '@/services/gamification';
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   },
   loginBannerText: { flex: 1, fontSize: FontSize.xs, color: Colors.primary },
 
-  xpBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.gold + '44' },
+  xpBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.goldMuted, borderRadius: Radius.xl, padding: Spacing.md, marginTop: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.gold + '33', ...Shadow.sm },
   xpBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   xpBannerIcon: { fontSize: 28 },
   xpBannerTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.gold, marginBottom: 6 },
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 88, height: 88, borderRadius: 44,
     backgroundColor: Colors.primaryMuted, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 3, borderColor: Colors.primary,
+    borderWidth: 2.5, borderColor: Colors.primary, ...Shadow.primary,
   },
   avatarText: { fontSize: 36, fontWeight: FontWeight.bold, color: Colors.primary },
   scoreRing: {
@@ -417,8 +417,8 @@ const styles = StyleSheet.create({
   goalText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.medium },
 
   bioStatsRow: {
-    flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.surfaceBorder, marginBottom: Spacing.md, overflow: 'hidden',
+    flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: Radius.xl,
+    borderWidth: 1, borderColor: Colors.surfaceBorder, marginBottom: Spacing.md, overflow: 'hidden', ...Shadow.sm,
   },
   bioStat: { flex: 1, alignItems: 'center', padding: Spacing.sm, gap: 4 },
   bioStatValue: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold },
@@ -436,8 +436,8 @@ const styles = StyleSheet.create({
   deficiencyNormal: { fontSize: FontSize.xs, color: Colors.textMuted },
 
   sectionCard: {
-    backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md,
-    marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder,
+    backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md,
+    marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm,
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
   sectionTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
@@ -473,16 +473,16 @@ const styles = StyleSheet.create({
   langLabel: { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   langLabelActive: { color: Colors.textPrimary },
   actionBtnsRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.md },
-  actionBtn: { flex: 1, flexDirection: 'column', alignItems: 'center', gap: 4, backgroundColor: Colors.primaryMuted, borderRadius: Radius.md, paddingVertical: 12, borderWidth: 1, borderColor: Colors.primary + '44' },
+  actionBtn: { flex: 1, flexDirection: 'column', alignItems: 'center', gap: 5, backgroundColor: Colors.primaryMuted, borderRadius: Radius.lg, paddingVertical: 14, borderWidth: 1, borderColor: Colors.primary + '33' },
   actionBtnText: { fontSize: 10, color: Colors.primary, fontWeight: FontWeight.semibold, textAlign: 'center' },
   notifRow: { flexDirection: 'row', alignItems: 'center' },
   notifInfo: { flex: 1 },
   notifSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: Colors.dangerMuted, borderRadius: Radius.lg,
-    paddingVertical: 14, marginBottom: Spacing.md,
-    borderWidth: 1, borderColor: Colors.danger + '44',
+    backgroundColor: Colors.dangerMuted, borderRadius: Radius.xl,
+    paddingVertical: 16, marginBottom: Spacing.md,
+    borderWidth: 1, borderColor: Colors.danger + '33',
   },
   logoutText: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.danger },
 });

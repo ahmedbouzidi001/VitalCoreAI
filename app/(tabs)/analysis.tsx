@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useHealth, BiologicalMarker } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { useAuth } from '@/contexts/AuthContext';
@@ -160,7 +160,7 @@ function MarkerRow({ marker, t, language }: { marker: BiologicalMarker; t: any; 
 }
 
 const mStyles = StyleSheet.create({
-  card: { backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  card: { backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
   top: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 },
   nameWrap: { flex: 1 },
   name: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
@@ -541,8 +541,8 @@ const styles = StyleSheet.create({
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   headerSub: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: 2 },
   headerActions: { flexDirection: 'row', gap: 8 },
-  pdfBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.goldMuted, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.gold + '44' },
-  addBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  pdfBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: Colors.goldMuted, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.gold + '44' },
+  addBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Shadow.primary },
 
   successBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.successMuted, borderRadius: Radius.md, padding: 10 },
   successText: { fontSize: FontSize.sm, color: Colors.success },
@@ -554,7 +554,7 @@ const styles = StyleSheet.create({
   pdfMarkerChip: { backgroundColor: Colors.surface, borderRadius: Radius.sm, padding: 8, borderWidth: 1, minWidth: 80, alignItems: 'center' },
   pdfMarkerName: { fontSize: 10, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
   pdfMarkerValue: { fontSize: FontSize.xs, fontWeight: FontWeight.bold },
-  applyPDFBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.gold, borderRadius: Radius.md, paddingVertical: 10, marginTop: 8 },
+  applyPDFBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.gold, borderRadius: Radius.lg, paddingVertical: 12, marginTop: 8, ...Shadow.gold },
   applyPDFText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
   aiResultPanel: { marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.primaryMuted, borderRadius: Radius.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primary + '44' },
@@ -588,11 +588,11 @@ const styles = StyleSheet.create({
   markerChipTextActive: { color: Colors.primary, fontWeight: FontWeight.semibold },
   inputRow: { flexDirection: 'row', gap: 8 },
   input: { flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm, paddingHorizontal: 14, paddingVertical: 10, color: Colors.textPrimary, fontSize: FontSize.md, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  saveBtn: { backgroundColor: Colors.primary, borderRadius: Radius.sm, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', minWidth: 100 },
+  saveBtn: { backgroundColor: Colors.primary, borderRadius: Radius.md, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', minWidth: 100, ...Shadow.primary },
   saveBtnText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
   aiActionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
-  aiAnalyzeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 12 },
+  aiAnalyzeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.lg, paddingVertical: 13, ...Shadow.primary },
   aiAnalyzeBtnLoading: { backgroundColor: Colors.textMuted },
   aiAnalyzeBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
   pdfActionBtn: { alignItems: 'center', gap: 2, backgroundColor: Colors.goldMuted, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.gold + '44' },
@@ -602,8 +602,8 @@ const styles = StyleSheet.create({
   errorText: { flex: 1, fontSize: FontSize.xs, color: Colors.danger },
 
   tabsRow: { flexDirection: 'row', paddingHorizontal: Spacing.md, gap: 8, marginBottom: Spacing.md },
-  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, borderRadius: Radius.sm, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  tabBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12, borderRadius: Radius.md, backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  tabBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary, ...Shadow.primary },
   tabText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, color: Colors.textMuted },
   tabTextActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
   scroll: { paddingHorizontal: Spacing.md },

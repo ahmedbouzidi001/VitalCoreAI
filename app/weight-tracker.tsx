@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHealth } from '@/hooks/useHealth';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import { saveWeightEntry, loadWeightHistory } from '@/services/vitalCore';
 import { useAlert } from '@/template';
 import { addXP } from '@/services/gamification';
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
 
   inputCard: {
     backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.lg,
-    marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, alignItems: 'center',
+    marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.surfaceBorder, alignItems: 'center', ...Shadow.sm,
   },
   currentLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: Spacing.md },
@@ -373,8 +373,9 @@ const styles = StyleSheet.create({
   unitLabel: { fontSize: FontSize.lg, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
   saveWeightBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.primary, borderRadius: Radius.md,
-    paddingVertical: 14, paddingHorizontal: 32,
+    backgroundColor: Colors.primary, borderRadius: Radius.lg,
+    paddingVertical: 15, paddingHorizontal: 36,
+    ...Shadow.primary,
   },
   saveWeightText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
@@ -382,7 +383,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.lg,
     padding: Spacing.md, alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: Colors.surfaceBorder,
+    borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm,
   },
   statValue: { fontSize: FontSize.md, fontWeight: FontWeight.extrabold },
   statLabel: { fontSize: 10, color: Colors.textMuted, textAlign: 'center' },
@@ -430,7 +431,8 @@ const styles = StyleSheet.create({
 
   loginCTA: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: Colors.primary, borderRadius: Radius.lg, paddingVertical: 16, marginVertical: Spacing.md,
+    backgroundColor: Colors.primary, borderRadius: Radius.xl, paddingVertical: 17, marginVertical: Spacing.md,
+    ...Shadow.primary,
   },
   loginCTAText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
 });

@@ -6,7 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useHealth, Meal, MealPlanDay } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 
 const MEAL_IMAGES: Record<string, any> = {
   'meal-1': require('@/assets/images/meal-1.png'),
@@ -230,9 +230,9 @@ const styles = StyleSheet.create({
   titleRow: { flex: 1, gap: 4 },
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   navBtns: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
-  logFoodBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.successMuted, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.success + '44' },
+  logFoodBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.successMuted, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.success + '44' },
   logFoodText: { fontSize: 10, color: Colors.success, fontWeight: FontWeight.semibold },
-  recipesNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.goldMuted, borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: Colors.gold + '44' },
+  recipesNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.goldMuted, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Colors.gold + '44' },
   recipesNavText: { fontSize: 10, color: Colors.gold, fontWeight: FontWeight.semibold },
   adaptedBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -243,7 +243,8 @@ const styles = StyleSheet.create({
   genBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: Colors.primary, borderRadius: Radius.full,
-    paddingHorizontal: 14, paddingVertical: 10,
+    paddingHorizontal: 16, paddingVertical: 11,
+    ...Shadow.primary,
   },
   genBtnLoading: { backgroundColor: Colors.textMuted },
   genBtnText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textInverse },
@@ -259,8 +260,8 @@ const styles = StyleSheet.create({
   dayBar: { marginBottom: Spacing.md },
   dayBarInner: { paddingHorizontal: Spacing.md, gap: 8 },
   dayChip: {
-    paddingHorizontal: 16, paddingVertical: 9, borderRadius: Radius.full,
-    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder,
   },
   dayChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   dayChipText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
@@ -269,9 +270,9 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: Spacing.md },
 
   summaryCard: {
-    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    backgroundColor: Colors.surface, borderRadius: Radius.xl,
     padding: Spacing.md, marginBottom: Spacing.md,
-    borderWidth: 1, borderColor: Colors.surfaceBorder,
+    borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm,
   },
   summaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
   summaryLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: 4 },
@@ -289,10 +290,10 @@ const styles = StyleSheet.create({
   macroSection: { gap: 2 },
 
   mealCard: {
-    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    backgroundColor: Colors.surface, borderRadius: Radius.xl,
     marginBottom: Spacing.md, overflow: 'hidden',
     borderWidth: 1, borderColor: Colors.surfaceBorder,
-    flexDirection: 'row',
+    flexDirection: 'row', ...Shadow.sm,
   },
   mealImage: { width: 110, height: 140 },
   mealInfo: { flex: 1, padding: Spacing.sm, gap: 6 },

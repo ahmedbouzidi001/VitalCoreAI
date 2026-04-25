@@ -9,7 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useHealth, WorkoutSession } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/contexts/AuthContext';
-import { Colors, Spacing, Radius, FontSize, FontWeight } from '@/constants/theme';
+import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import { supabase } from '@/services/supabase';
 import { addXP } from '@/services/gamification';
 import { useRouter } from 'expo-router';
@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  splitPickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  splitPickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.surfaceBorder },
   splitPickerText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
 
   splitPickerPanel: { marginHorizontal: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
   splitChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   splitChipText: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.medium },
   splitChipTextActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
-  generateSplitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 14, marginTop: 8 },
+  generateSplitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.lg, paddingVertical: 15, marginTop: 8, ...Shadow.primary },
   generateSplitText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
   typeFilters: { paddingHorizontal: Spacing.md, gap: 8, paddingBottom: Spacing.sm },
@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
   dayChipDayActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
 
   scroll: { paddingHorizontal: Spacing.md },
-  sessionCard: { borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1 },
+  sessionCard: { borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, ...Shadow.sm },
   sessionTop: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.sm },
   sessionIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   sessionInfo: { flex: 1 },
@@ -853,22 +853,19 @@ const styles = StyleSheet.create({
 
   startBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    borderRadius: Radius.lg, paddingVertical: 18,
+    borderRadius: Radius.xl, paddingVertical: 18,
     shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
   },
   startBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse },
-  // Override for summary card
-  summaryCard: { backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '44', alignItems: 'center', gap: 8 },
-
-  summaryCard: { backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '44', alignItems: 'center', gap: 8 },
+  summaryCard: { backgroundColor: Colors.goldMuted, borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '33', alignItems: 'center', gap: 8, ...Shadow.sm },
   summaryTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.gold },
   summaryDetail: { fontSize: FontSize.sm, color: Colors.textSecondary },
   summaryVolume: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
-  newSessionBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: 24, paddingVertical: 14 },
+  newSessionBtn: { backgroundColor: Colors.gold, borderRadius: Radius.lg, paddingHorizontal: 28, paddingVertical: 14, ...Shadow.gold },
   newSessionText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
   sectionTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
-  exCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.md, marginBottom: 8, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  exCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 8, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
   exCardDone: { borderColor: Colors.success + '66', backgroundColor: Colors.successMuted },
   exNumber: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   exNumberText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary },
