@@ -48,52 +48,112 @@ function WeightInputModal({
   const [weight, setWeight] = useState(previousWeight ? String(previousWeight) : '');
   const [reps, setReps] = useState('10');
 
+  const adjustWeight = (delta: number) => {
+    const current = parseFloat(weight) || 0;
+    const next = Math.max(0, current + delta);
+    setWeight(String(Number.isInteger(next) ? next : next.toFixed(1)));
+  };
+  const adjustReps = (delta: number) => {
+    const current = parseInt(reps) || 10;
+    setReps(String(Math.max(1, current + delta)));
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onSkip}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: Colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.lg, paddingBottom: 40 }}>
-          <Text style={{ fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 4 }}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: Colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: Spacing.lg, paddingBottom: 48, borderTopWidth: 2, borderTopColor: color }}>
+          {/* Handle */}
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.surfaceBorder, alignSelf: 'center', marginBottom: Spacing.md }} />
+          <Text style={{ fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 2, textAlign: 'center' }}>
             {exerciseName}
           </Text>
-          <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: Spacing.md }}>
-            {isAr ? `الجلسة ${setNum}` : `Série ${setNum}`} {previousWeight ? `· ${isAr ? 'السابق' : 'Précédent'}: ${previousWeight}kg` : ''}
+          <Text style={{ fontSize: FontSize.sm, color: color, marginBottom: Spacing.lg, textAlign: 'center', fontWeight: FontWeight.semibold }}>
+            {isAr ? `الجلسة ${setNum}` : `Série ${setNum}`}{previousWeight ? ` · ${isAr ? 'السابق' : 'Précédent'}: ${previousWeight} kg` : ''}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: Spacing.md }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 6 }}>{isAr ? 'الوزن (كغ)' : 'Poids (kg)'}</Text>
-              <TextInput
-                style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm, padding: 12, color: Colors.textPrimary, fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center', borderWidth: 1, borderColor: color + '44' }}
-                value={weight}
-                onChangeText={setWeight}
-                keyboardType="decimal-pad"
-                placeholder="0"
-                placeholderTextColor={Colors.textMuted}
-              />
+
+          <View style={{ flexDirection: 'row', gap: 16, marginBottom: Spacing.lg }}>
+            {/* Weight adjuster */}
+            <View style={{ flex: 1, alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.semibold, letterSpacing: 1 }}>{isAr ? 'الوزن (كغ)' : 'POIDS (kg)'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => adjustWeight(-2.5)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
+                >
+                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>−</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10, color: color, fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, textAlign: 'center', borderWidth: 2, borderColor: color + '66', minWidth: 80 }}
+                  value={weight}
+                  onChangeText={setWeight}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={Colors.textMuted}
+                  selectTextOnFocus
+                />
+                <TouchableOpacity
+                  onPress={() => adjustWeight(2.5)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
+                >
+                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>+</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 6 }}>{isAr ? 'التكرارات' : 'Répétitions'}</Text>
-              <TextInput
-                style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.sm, padding: 12, color: Colors.textPrimary, fontSize: FontSize.xl, fontWeight: FontWeight.bold, textAlign: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
-                value={reps}
-                onChangeText={setReps}
-                keyboardType="number-pad"
-              />
+
+            {/* Reps adjuster */}
+            <View style={{ flex: 1, alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.semibold, letterSpacing: 1 }}>{isAr ? 'التكرارات' : 'RÉPÉTITIONS'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => adjustReps(-1)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
+                >
+                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>−</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10, color: Colors.textPrimary, fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, textAlign: 'center', borderWidth: 2, borderColor: Colors.surfaceBorder, minWidth: 64 }}
+                  value={reps}
+                  onChangeText={setReps}
+                  keyboardType="number-pad"
+                  selectTextOnFocus
+                />
+                <TouchableOpacity
+                  onPress={() => adjustReps(1)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
+                >
+                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>+</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
+
+          {/* Confirm — large prominent button */}
           <TouchableOpacity
-            style={{ backgroundColor: color, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', marginBottom: 8 }}
+            style={{ backgroundColor: color, borderRadius: Radius.lg, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexDirection: 'row', gap: 10, shadowColor: color, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 }}
             onPress={() => {
               const w = parseFloat(weight) || 0;
               const r = parseInt(reps) || 10;
               onConfirm(w, r);
             }}
+            activeOpacity={0.85}
           >
-            <Text style={{ fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse }}>
-              {isAr ? 'تأكيد الجلسة ✓' : 'Confirmer la série ✓'}
+            <MaterialIcons name="check-circle" size={24} color={Colors.textInverse} />
+            <Text style={{ fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse }}>
+              {isAr ? 'تأكيد الجلسة' : 'Confirmer la série'}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onSkip} style={{ alignItems: 'center', paddingVertical: 10 }}>
-            <Text style={{ fontSize: FontSize.sm, color: Colors.textMuted }}>{isAr ? 'تخطي' : 'Passer'}</Text>
+
+          <TouchableOpacity
+            onPress={onSkip}
+            style={{ alignItems: 'center', paddingVertical: 14 }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 32, right: 32 }}
+          >
+            <Text style={{ fontSize: FontSize.sm, color: Colors.textMuted }}>{isAr ? 'تخطي بدون وزن' : 'Passer sans peser'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -168,10 +228,10 @@ function AdvancedTimer({
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   };
 
-  const handleSetDone = () => {
+  const handleSetDone = useCallback(() => {
     // Show weight input modal before logging the set
     setShowWeightModal(true);
-  };
+  }, []);
 
   const handleWeightConfirm = async (weight: number, reps: number) => {
     setShowWeightModal(false);
@@ -231,7 +291,7 @@ function AdvancedTimer({
           </View>
         )}
         {allSetLogs.length > 0 && (
-          <ScrollView style={{ maxHeight: 160, width: '100%' }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: 200, width: '100%' }} showsVerticalScrollIndicator={false}>
             {allSetLogs.map((l, i) => (
               <View key={i} style={timerStyles.logRow}>
                 <Text style={timerStyles.logEx} numberOfLines={1}>{l.exercise_name}</Text>
@@ -265,39 +325,78 @@ function AdvancedTimer({
 
       {phase === 'rest' ? (
         <View style={timerStyles.restPhase}>
-          <Text style={timerStyles.phaseLabel}>{isAr ? '⏸ راحة' : '⏸ REPOS'}</Text>
+          <View style={[timerStyles.phasePill, { backgroundColor: Colors.warning + '22', borderColor: Colors.warning + '55' }]}>
+            <Text style={[timerStyles.phaseLabel, { color: Colors.warning }]}>⏸ {isAr ? 'فترة الراحة' : 'REPOS'}</Text>
+          </View>
           <Text style={[timerStyles.countdownBig, { color: Colors.warning }]}>{formatTime(restSeconds)}</Text>
-          <Text style={timerStyles.nextLabel}>{isAr ? `الجلسة القادمة: ${currentSet + 1}/${totalSets}` : `Prochain: Série ${currentSet + 1}/${totalSets}`}</Text>
-          <TouchableOpacity style={timerStyles.skipRestBtn} onPress={() => { clearInterval(restInterval.current); setPhase('work'); }}>
-            <Text style={timerStyles.skipRestText}>{isAr ? 'تخطي الراحة →' : 'Passer le repos →'}</Text>
+          <Text style={timerStyles.nextLabel}>
+            {isAr ? `الجلسة القادمة: ${currentSet}/${totalSets}` : `Prochaine: Série ${currentSet}/${totalSets}`}
+          </Text>
+          <TouchableOpacity
+            style={timerStyles.skipRestBtn}
+            onPress={() => { clearInterval(restInterval.current); setPhase('work'); }}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+          >
+            <MaterialIcons name="skip-next" size={18} color={Colors.textSecondary} />
+            <Text style={timerStyles.skipRestText}>{isAr ? 'تخطي الراحة' : 'Passer le repos'}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={timerStyles.workPhase}>
-          <Text style={[timerStyles.phaseLabel, { color }]}>{isAr ? '💪 جاري التدريب' : '💪 EN COURS'}</Text>
-          <Text style={timerStyles.exerciseName} numberOfLines={1}>{exercise?.name}</Text>
+          <View style={[timerStyles.phasePill, { backgroundColor: color + '22', borderColor: color + '55' }]}>
+            <Text style={[timerStyles.phaseLabel, { color }]}>💪 {isAr ? 'جاري التدريب' : 'EN COURS'}</Text>
+          </View>
+
+          <Text style={timerStyles.exerciseName} numberOfLines={2}>{exercise?.name}</Text>
+
+          {/* Set progress dots */}
           <View style={timerStyles.setsRow}>
             {Array.from({ length: totalSets }).map((_, i) => (
-              <View key={i} style={[timerStyles.setDot, i < currentSet - 1 && { backgroundColor: Colors.success }, i === currentSet - 1 && { backgroundColor: color }]} />
+              <View
+                key={i}
+                style={[
+                  timerStyles.setDot,
+                  i < currentSet - 1 && { backgroundColor: Colors.success, transform: [{ scale: 1.1 }] },
+                  i === currentSet - 1 && { backgroundColor: color, width: 20, borderRadius: 4 },
+                ]}
+              />
             ))}
           </View>
+
           <Text style={timerStyles.setLabel}>
-            {isAr ? `الجلسة ${currentSet} / ${totalSets} · ${exercise?.reps} تكرار` : `Série ${currentSet} / ${totalSets}  ·  ${exercise?.reps} reps`}
+            {isAr
+              ? `الجلسة ${currentSet} / ${totalSets}  ·  ${exercise?.reps} تكرار`
+              : `Série ${currentSet} / ${totalSets}  ·  ${exercise?.reps} reps`
+            }
           </Text>
-          {previousWeights[exercise?.id] && (
+
+          {previousWeights[exercise?.id] != null && previousWeights[exercise?.id]! > 0 && (
             <View style={timerStyles.prevWeightRow}>
-              <MaterialIcons name="history" size={12} color={Colors.textMuted} />
-              <Text style={timerStyles.prevWeightText}>
-                {isAr ? `السابق: ${previousWeights[exercise?.id]}kg` : `Précédent: ${previousWeights[exercise?.id]}kg`}
+              <MaterialIcons name="history" size={13} color={Colors.gold} />
+              <Text style={[timerStyles.prevWeightText, { color: Colors.gold }]}>
+                {isAr ? `السابق: ${previousWeights[exercise?.id]} kg` : `Précédent: ${previousWeights[exercise?.id]} kg`}
               </Text>
             </View>
           )}
+
           {exercise?.technique && (
-            <Text style={timerStyles.techniqueText}>{exercise.technique}</Text>
+            <View style={timerStyles.techniqueBox}>
+              <MaterialIcons name="tips-and-updates" size={12} color={color} />
+              <Text style={[timerStyles.techniqueText, { color: color + 'CC' }]}>{exercise.technique}</Text>
+            </View>
           )}
-          <TouchableOpacity style={[timerStyles.doneSetBtn, { backgroundColor: color }]} onPress={handleSetDone} activeOpacity={0.85}>
-            <MaterialIcons name="check" size={20} color={Colors.textInverse} />
-            <Text style={timerStyles.doneSetText}>{isAr ? 'انتهت الجلسة' : 'Série terminée'}</Text>
+
+          {/* PRIMARY ACTION — large, unmissable */}
+          <TouchableOpacity
+            style={[timerStyles.doneSetBtn, { backgroundColor: color }]}
+            onPress={handleSetDone}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="check-circle" size={26} color={Colors.textInverse} />
+            <Text style={timerStyles.doneSetText}>
+              {isAr ? 'انتهت الجلسة' : 'Série terminée'}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -313,33 +412,40 @@ const timerStyles = StyleSheet.create({
   },
   totalRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   totalTime: { fontSize: FontSize.xs, color: Colors.textMuted },
-  phaseLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Colors.textMuted, marginBottom: 8, textAlign: 'center' },
-  restPhase: { alignItems: 'center', gap: 8 },
-  countdownBig: { fontSize: 56, fontWeight: FontWeight.extrabold },
+  phasePill: { alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, marginBottom: 4 },
+  phaseLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, letterSpacing: 1.5, textAlign: 'center' },
+  restPhase: { alignItems: 'center', gap: 12 },
+  countdownBig: { fontSize: 64, fontWeight: FontWeight.extrabold, letterSpacing: -2 },
   nextLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  skipRestBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: Colors.surfaceBorder, borderRadius: Radius.full, marginTop: 4 },
-  skipRestText: { fontSize: FontSize.xs, color: Colors.textSecondary },
-  workPhase: { gap: 10 },
-  exerciseName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
-  setsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  setDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.surfaceBorder },
-  setLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center' },
-  techniqueText: { fontSize: FontSize.xs, color: Colors.primary, fontStyle: 'italic', textAlign: 'center', lineHeight: 16 },
-  doneSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.md, paddingVertical: 14, marginTop: 4 },
-  doneSetText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
+  skipRestBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: Colors.surfaceBorder, borderRadius: Radius.full, marginTop: 4 },
+  skipRestText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
+  workPhase: { gap: 12 },
+  exerciseName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center', lineHeight: 28 },
+  setsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, alignItems: 'center' },
+  setDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: Colors.surfaceBorder },
+  setLabel: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', fontWeight: FontWeight.semibold },
+  techniqueBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.surface, borderRadius: Radius.sm, padding: 10 },
+  techniqueText: { flex: 1, fontSize: FontSize.xs, fontStyle: 'italic', lineHeight: 17 },
+  // PRIMARY ACTION BUTTON — large, 64px+ height, unmissable
+  doneSetBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    borderRadius: Radius.lg, paddingVertical: 20, marginTop: 8,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8,
+  },
+  doneSetText: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse, letterSpacing: 0.3 },
   doneCard: { alignItems: 'center', padding: Spacing.xl, gap: 12, width: '100%' },
-  doneIcon: { fontSize: 48 },
+  doneIcon: { fontSize: 56 },
   doneTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.gold },
   doneTime: { fontSize: FontSize.md, color: Colors.textSecondary },
-  volumeBox: { backgroundColor: Colors.goldMuted, borderRadius: Radius.md, paddingHorizontal: 20, paddingVertical: 8, alignItems: 'center', borderWidth: 1, borderColor: Colors.gold + '44' },
+  volumeBox: { backgroundColor: Colors.goldMuted, borderRadius: Radius.md, paddingHorizontal: 24, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.gold + '44' },
   volumeLabel: { fontSize: FontSize.xs, color: Colors.textMuted },
   volumeVal: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.gold },
-  logRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: 8 },
+  logRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: 8 },
   logEx: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary },
   logDetail: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.semibold },
   volumeInline: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.semibold },
-  prevWeightRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  prevWeightText: { fontSize: FontSize.xs, color: Colors.textMuted },
+  prevWeightRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', backgroundColor: Colors.goldMuted, paddingHorizontal: 12, paddingVertical: 5, borderRadius: Radius.full },
+  prevWeightText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
 });
 
 export default function TrainingScreen() {
@@ -388,13 +494,13 @@ export default function TrainingScreen() {
     if (user) addXP(user.id, 'complete_workout').catch(console.error);
   };
 
-  const startWorkout = () => {
+  const startWorkout = useCallback(() => {
     setCompletedExercises(new Set());
     setCompletedSets({});
     setCurrentExerciseIdx(0);
     setWorkoutSummary(null);
     setWorkoutRunning(true);
-  };
+  }, []);
 
   const handleGenerateWithSplit = useCallback(() => {
     regenerateWorkout(activeType, activeSplit);
@@ -551,11 +657,11 @@ export default function TrainingScreen() {
               {/* Start/Stop Button */}
               {!workoutRunning && !workoutSummary && (
                 <TouchableOpacity
-                  style={[styles.startBtn, { backgroundColor: cfg.color }]}
+                  style={[styles.startBtn, { backgroundColor: cfg.color, shadowColor: cfg.color }]}
                   onPress={startWorkout}
-                  activeOpacity={0.9}
+                  activeOpacity={0.85}
                 >
-                  <MaterialIcons name="play-arrow" size={20} color={Colors.textInverse} />
+                  <MaterialIcons name="play-circle-filled" size={24} color={Colors.textInverse} />
                   <Text style={styles.startBtnText}>{t('start_workout')}</Text>
                 </TouchableOpacity>
               )}
@@ -704,11 +810,11 @@ const styles = StyleSheet.create({
   splitChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   splitChipText: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.medium },
   splitChipTextActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
-  generateSplitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 12, marginTop: 4 },
-  generateSplitText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
+  generateSplitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 14, marginTop: 8 },
+  generateSplitText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
   typeFilters: { paddingHorizontal: Spacing.md, gap: 8, paddingBottom: Spacing.sm },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
   typeChipText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, color: Colors.textMuted },
   typeChipTextActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
 
@@ -717,7 +823,7 @@ const styles = StyleSheet.create({
 
   dayBar: { marginBottom: Spacing.md },
   dayBarInner: { paddingHorizontal: Spacing.md, gap: 8 },
-  dayChip: { alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  dayChip: { alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
   dayChipDay: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   dayChipDayActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
 
@@ -745,14 +851,20 @@ const styles = StyleSheet.create({
   scienceLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
   scienceTip: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
 
-  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.md, paddingVertical: 14 },
-  startBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
+  startBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    borderRadius: Radius.lg, paddingVertical: 18,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+  },
+  startBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse },
+  // Override for summary card
+  summaryCard: { backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '44', alignItems: 'center', gap: 8 },
 
   summaryCard: { backgroundColor: Colors.goldMuted, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '44', alignItems: 'center', gap: 8 },
   summaryTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.gold },
   summaryDetail: { fontSize: FontSize.sm, color: Colors.textSecondary },
   summaryVolume: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.gold },
-  newSessionBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: 20, paddingVertical: 10 },
+  newSessionBtn: { backgroundColor: Colors.gold, borderRadius: Radius.md, paddingHorizontal: 24, paddingVertical: 14 },
   newSessionText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
   sectionTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
