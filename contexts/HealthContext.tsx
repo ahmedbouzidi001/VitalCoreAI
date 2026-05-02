@@ -109,7 +109,7 @@ interface HealthContextType {
   updateDailyStats: (updates: Partial<DailyStats>) => void;
   weeklyMealPlan: MealPlanDay[];
   weeklyWorkout: WorkoutSession[];
-  regenerateMealPlan: () => Promise<void>;
+  regenerateMealPlan: (preferencesContext?: string) => Promise<void>;
   regenerateWorkout: (type: WorkoutSession['type'], splitType?: string) => Promise<void>;
   completeOnboarding: () => void;
   onboardingDone: boolean;
@@ -354,14 +354,14 @@ export function HealthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const regenerateMealPlan = useCallback(async () => {
+  const regenerateMealPlan = useCallback(async (preferencesContext?: string) => {
     setIsMealLoading(true);
     try {
       const results = await Promise.all(
         Array(7).fill(null).map(() =>
           generateMealPlanDay(
             biomarkers.map(b => ({ name: b.name, value: b.value, unit: b.unit, normal_min: b.normalMin, normal_max: b.normalMax })),
-            { ...profile, tdee: 2200 },
+            { ...profile, tdee: 2200, preferencesContext: preferencesContext || '' },
             'fr',
             'TN'
           )

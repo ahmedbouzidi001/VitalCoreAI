@@ -169,6 +169,18 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Premium Banner */}
+        <TouchableOpacity style={styles.premiumBanner} onPress={() => router.push('/premium')} activeOpacity={0.87}>
+          <View style={styles.premiumLeft}>
+            <MaterialIcons name="workspace-premium" size={20} color={Colors.gold} />
+            <View>
+              <Text style={styles.premiumTitle}>{language === 'ar' ? 'ترقية إلى بريميوم' : 'Passer à Premium'}</Text>
+              <Text style={styles.premiumSub}>{language === 'ar' ? 'تحليلات غير محدودة · PDF · ذكاء اصطناعي' : 'Analyses illimitées · PDF · Chat IA · Recettes'}</Text>
+            </View>
+          </View>
+          <MaterialIcons name="arrow-forward-ios" size={14} color={Colors.gold} />
+        </TouchableOpacity>
+
         {/* Chat IA + Weight Tracker buttons */}
         <View style={styles.actionBtnsRow}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/chat')} activeOpacity={0.85}>
@@ -472,6 +484,15 @@ const styles = StyleSheet.create({
   langFlag: { fontSize: 22 },
   langLabel: { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   langLabelActive: { color: Colors.textPrimary },
+  premiumBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.goldMuted, borderRadius: Radius.xl,
+    padding: Spacing.md, marginBottom: Spacing.sm,
+    borderWidth: 1.5, borderColor: Colors.gold + '55', ...Shadow.gold,
+  },
+  premiumLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  premiumTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.gold },
+  premiumSub: { fontSize: FontSize.micro, color: Colors.textMuted, marginTop: 2 },
   actionBtnsRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.md },
   actionBtn: { flex: 1, flexDirection: 'column', alignItems: 'center', gap: 5, backgroundColor: Colors.primaryMuted, borderRadius: Radius.lg, paddingVertical: 14, borderWidth: 1, borderColor: Colors.primary + '33' },
   actionBtnText: { fontSize: 10, color: Colors.primary, fontWeight: FontWeight.semibold, textAlign: 'center' },

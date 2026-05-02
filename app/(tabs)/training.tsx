@@ -1,9 +1,11 @@
-// Advanced Workout Timer Screen
+// VitalCore AI — Advanced Training Screen v4
+// Features: Large readable filters, exercise photos+instructions, reorder, AI guidance
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar,
-  ActivityIndicator, Vibration, Platform, TextInput, Modal,
+  ActivityIndicator, Vibration, Platform, TextInput, Modal, Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useHealth, WorkoutSession } from '@/hooks/useHealth';
@@ -14,34 +16,82 @@ import { supabase } from '@/services/supabase';
 import { addXP } from '@/services/gamification';
 import { useRouter } from 'expo-router';
 
-const TYPE_CONFIG: Record<string, { color: string; icon: string; gradient: string }> = {
-  hypertrophy: { color: Colors.primary, icon: 'fitness-center', gradient: Colors.primaryMuted },
-  strength: { color: Colors.gold, icon: 'bolt', gradient: Colors.goldMuted },
-  endurance: { color: Colors.success, icon: 'directions-run', gradient: Colors.successMuted },
-  longevity: { color: Colors.purple, icon: 'self-improvement', gradient: Colors.purpleMuted },
-  recovery: { color: Colors.textSecondary, icon: 'spa', gradient: 'rgba(138,155,193,0.12)' },
+const { width } = Dimensions.get('window');
+
+// ── Exercise Images (Unsplash real photos) ─────────────────────────────────────
+const EXERCISE_IMAGES: Record<string, string> = {
+  bench_press: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&q=80',
+  squat: 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=400&q=80',
+  deadlift: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=80',
+  pull_up: 'https://images.unsplash.com/photo-1598971639058-fab3c3109a07?w=400&q=80',
+  shoulder_press: 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=400&q=80',
+  row: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400&q=80',
+  default: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=400&q=80',
+};
+
+function getExerciseImage(exerciseName: string): string {
+  const name = exerciseName.toLowerCase();
+  if (name.includes('bench') || name.includes('pec') || name.includes('presse')) return EXERCISE_IMAGES.bench_press;
+  if (name.includes('squat') || name.includes('leg press') || name.includes('jambe')) return EXERCISE_IMAGES.squat;
+  if (name.includes('deadlift') || name.includes('soulevé') || name.includes('terre')) return EXERCISE_IMAGES.deadlift;
+  if (name.includes('pull') || name.includes('traction') || name.includes('chin')) return EXERCISE_IMAGES.pull_up;
+  if (name.includes('press') && (name.includes('shoulder') || name.includes('épaul') || name.includes('overhead'))) return EXERCISE_IMAGES.shoulder_press;
+  if (name.includes('row') || name.includes('tirage') || name.includes('rameur')) return EXERCISE_IMAGES.row;
+  return EXERCISE_IMAGES.default;
+}
+
+// ── Exercise instructions database ────────────────────────────────────────────
+const EXERCISE_TIPS: Record<string, { cues: string[]; common_mistakes: string[]; breathing: string }> = {
+  default: {
+    cues: ['Contrôle la descente (3 sec)', 'Poussez le sol / la barre explosément', 'Gardez le gainage abdominal'],
+    common_mistakes: ['Ne pas aller assez bas', 'Repos trop courts entre séries', 'Charge trop lourde au détriment de la forme'],
+    breathing: 'Inspirez à la descente, expirez à l\'effort',
+  },
+  bench: {
+    cues: ['Omoplates rétractées sur le banc', 'Pieds bien à plat sur le sol', 'Grip légèrement plus large que les épaules', 'Descente contrôlée sur 3s'],
+    common_mistakes: ['Dos en hyperextension', 'Coudes trop ouverts à 90°', 'Rebond sur la poitrine'],
+    breathing: 'Inspirez à la descente, bloquez et expirez à la montée',
+  },
+  squat: {
+    cues: ['Pieds à largeur d\'épaules, orteils légèrement vers l\'extérieur', 'Genoux dans l\'axe des orteils', 'Descente jusqu\'au parallèle minimum', 'Poitrine haute, regard devant'],
+    common_mistakes: ['Valgus des genoux (effondrement vers l\'intérieur)', 'Talon décollé du sol', 'Dos arrondi'],
+    breathing: 'Inspirez avant de descendre (Valsalva), expirez en montant',
+  },
+  deadlift: {
+    cues: ['Barre sur le dessus des pieds', 'Hanche en arrière, dos droit', 'Engager les dorsaux avant de tirer', 'Poussez le sol'],
+    common_mistakes: ['Dos rond (risque lombaire)', 'Barre trop loin du corps', 'Hyperextension en haut'],
+    breathing: 'Inspirez, bloquez (Valsalva), expirez au sommet',
+  },
+};
+
+function getExerciseTips(name: string) {
+  const n = name.toLowerCase();
+  if (n.includes('bench') || n.includes('pec')) return EXERCISE_TIPS.bench;
+  if (n.includes('squat') || n.includes('goblet')) return EXERCISE_TIPS.squat;
+  if (n.includes('deadlift') || n.includes('soulevé')) return EXERCISE_TIPS.deadlift;
+  return EXERCISE_TIPS.default;
+}
+
+// ── Type Config ──────────────────────────────────────────────────────────────
+const TYPE_CONFIG: Record<string, { color: string; icon: string; gradient: string; label: string; desc: string }> = {
+  hypertrophy: { color: Colors.primary, icon: 'fitness-center', gradient: Colors.primaryMuted, label: 'Hypertrophie', desc: '8-12 reps · Force musculaire' },
+  strength: { color: Colors.gold, icon: 'bolt', gradient: Colors.goldMuted, label: 'Force', desc: '3-6 reps · Charge maximale' },
+  endurance: { color: Colors.success, icon: 'directions-run', gradient: Colors.successMuted, label: 'Endurance', desc: '15-20 reps · Cardio-musculaire' },
+  longevity: { color: Colors.purple, icon: 'self-improvement', gradient: Colors.purpleMuted, label: 'Longévité', desc: '10-15 reps · Santé globale' },
+  recovery: { color: Colors.textSecondary, icon: 'spa', gradient: 'rgba(138,155,193,0.12)', label: 'Récup', desc: 'Repos actif · Mobilité' },
 };
 
 const SPLIT_TYPES = [
-  { key: 'upper_lower', label: 'Upper/Lower', icon: 'swap-vert' },
-  { key: 'ppl', label: 'PPL', icon: 'repeat' },
-  { key: 'arnold', label: 'Arnold', icon: 'star' },
-  { key: 'anterior_posterior', label: 'Ant/Post', icon: 'compare-arrows' },
-  { key: 'full_body', label: 'Full Body', icon: 'accessibility-new' },
-  { key: 'bro_split', label: 'Bro Split', icon: 'sports-gymnastics' },
+  { key: 'upper_lower', label: 'Upper/Lower', icon: 'swap-vert', desc: '4j/sem · Haut + Bas' },
+  { key: 'ppl', label: 'PPL', icon: 'repeat', desc: '6j/sem · Push/Pull/Legs' },
+  { key: 'arnold', label: 'Arnold Split', icon: 'star', desc: '6j/sem · Chest+Back / Shoulders+Arms / Legs' },
+  { key: 'anterior_posterior', label: 'Ant/Post', icon: 'compare-arrows', desc: '4j/sem · Antérieur/Postérieur' },
+  { key: 'full_body', label: 'Full Body', icon: 'accessibility-new', desc: '3j/sem · Corps entier' },
+  { key: 'bro_split', label: 'Bro Split', icon: 'sports-gymnastics', desc: '5j/sem · 1 muscle/séance' },
 ] as const;
 
-const WORKOUT_TYPES: Array<{ key: WorkoutSession['type']; label: string; labelFr: string }> = [
-  { key: 'hypertrophy', label: 'Hypertrophie', labelFr: 'Hypertrophie' },
-  { key: 'strength', label: 'Force', labelFr: 'Force' },
-  { key: 'endurance', label: 'Endurance', labelFr: 'Endurance' },
-  { key: 'longevity', label: 'Longévité', labelFr: 'Longévité' },
-];
-
-// ---- Weight Input Modal ----
-function WeightInputModal({
-  visible, exerciseName, setNum, previousWeight, onConfirm, onSkip, color, isAr,
-}: {
+// ── Weight Input Modal ────────────────────────────────────────────────────────
+function WeightInputModal({ visible, exerciseName, setNum, previousWeight, onConfirm, onSkip, color, isAr }: {
   visible: boolean; exerciseName: string; setNum: number; previousWeight: number | null;
   onConfirm: (weight: number, reps: number) => void; onSkip: () => void; color: string; isAr: boolean;
 }) {
@@ -53,107 +103,67 @@ function WeightInputModal({
     const next = Math.max(0, current + delta);
     setWeight(String(Number.isInteger(next) ? next : next.toFixed(1)));
   };
-  const adjustReps = (delta: number) => {
-    const current = parseInt(reps) || 10;
-    setReps(String(Math.max(1, current + delta)));
-  };
+  const adjustReps = (delta: number) => setReps(String(Math.max(1, (parseInt(reps) || 10) + delta)));
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onSkip}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: Colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: Spacing.lg, paddingBottom: 48, borderTopWidth: 2, borderTopColor: color }}>
-          {/* Handle */}
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.surfaceBorder, alignSelf: 'center', marginBottom: Spacing.md }} />
-          <Text style={{ fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 2, textAlign: 'center' }}>
-            {exerciseName}
-          </Text>
-          <Text style={{ fontSize: FontSize.sm, color: color, marginBottom: Spacing.lg, textAlign: 'center', fontWeight: FontWeight.semibold }}>
-            {isAr ? `الجلسة ${setNum}` : `Série ${setNum}`}{previousWeight ? ` · ${isAr ? 'السابق' : 'Précédent'}: ${previousWeight} kg` : ''}
+        <View style={[wStyles.panel, { borderTopColor: color }]}>
+          <View style={wStyles.handle} />
+          <Text style={wStyles.exName}>{exerciseName}</Text>
+          <Text style={[wStyles.setInfo, { color }]}>
+            {isAr ? `الجلسة ${setNum}` : `Série ${setNum}`}
+            {previousWeight ? `  ·  ${isAr ? 'السابق' : 'Précédent'}: ${previousWeight} kg` : ''}
           </Text>
 
-          <View style={{ flexDirection: 'row', gap: 16, marginBottom: Spacing.lg }}>
-            {/* Weight adjuster */}
-            <View style={{ flex: 1, alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.semibold, letterSpacing: 1 }}>{isAr ? 'الوزن (كغ)' : 'POIDS (kg)'}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <TouchableOpacity
-                  onPress={() => adjustWeight(-2.5)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
-                >
-                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>−</Text>
+          <View style={wStyles.adjustRow}>
+            {/* Weight */}
+            <View style={wStyles.adjustCol}>
+              <Text style={wStyles.adjustLabel}>{isAr ? 'الوزن (كغ)' : 'POIDS (kg)'}</Text>
+              <View style={wStyles.adjRow}>
+                <TouchableOpacity onPress={() => adjustWeight(-2.5)} style={wStyles.adjBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={wStyles.adjBtnText}>−</Text>
                 </TouchableOpacity>
                 <TextInput
-                  style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10, color: color, fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, textAlign: 'center', borderWidth: 2, borderColor: color + '66', minWidth: 80 }}
-                  value={weight}
-                  onChangeText={setWeight}
-                  keyboardType="decimal-pad"
-                  placeholder="0"
-                  placeholderTextColor={Colors.textMuted}
-                  selectTextOnFocus
+                  style={[wStyles.adjInput, { color, borderColor: color + '66' }]}
+                  value={weight} onChangeText={setWeight}
+                  keyboardType="decimal-pad" placeholder="0"
+                  placeholderTextColor={Colors.textMuted} selectTextOnFocus
                 />
-                <TouchableOpacity
-                  onPress={() => adjustWeight(2.5)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
-                >
-                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>+</Text>
+                <TouchableOpacity onPress={() => adjustWeight(2.5)} style={wStyles.adjBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={wStyles.adjBtnText}>+</Text>
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Reps adjuster */}
-            <View style={{ flex: 1, alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.semibold, letterSpacing: 1 }}>{isAr ? 'التكرارات' : 'RÉPÉTITIONS'}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <TouchableOpacity
-                  onPress={() => adjustReps(-1)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
-                >
-                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>−</Text>
+            {/* Reps */}
+            <View style={wStyles.adjustCol}>
+              <Text style={wStyles.adjustLabel}>{isAr ? 'التكرارات' : 'REPS'}</Text>
+              <View style={wStyles.adjRow}>
+                <TouchableOpacity onPress={() => adjustReps(-1)} style={wStyles.adjBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={wStyles.adjBtnText}>−</Text>
                 </TouchableOpacity>
                 <TextInput
-                  style={{ backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10, color: Colors.textPrimary, fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, textAlign: 'center', borderWidth: 2, borderColor: Colors.surfaceBorder, minWidth: 64 }}
-                  value={reps}
-                  onChangeText={setReps}
-                  keyboardType="number-pad"
-                  selectTextOnFocus
+                  style={[wStyles.adjInput, { color: Colors.textPrimary, borderColor: Colors.surfaceBorder }]}
+                  value={reps} onChangeText={setReps}
+                  keyboardType="number-pad" selectTextOnFocus
                 />
-                <TouchableOpacity
-                  onPress={() => adjustReps(1)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder }}
-                >
-                  <Text style={{ fontSize: 20, color: Colors.textPrimary, fontWeight: FontWeight.bold }}>+</Text>
+                <TouchableOpacity onPress={() => adjustReps(1)} style={wStyles.adjBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={wStyles.adjBtnText}>+</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
 
-          {/* Confirm — large prominent button */}
           <TouchableOpacity
-            style={{ backgroundColor: color, borderRadius: Radius.lg, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexDirection: 'row', gap: 10, shadowColor: color, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 }}
-            onPress={() => {
-              const w = parseFloat(weight) || 0;
-              const r = parseInt(reps) || 10;
-              onConfirm(w, r);
-            }}
+            style={[wStyles.confirmBtn, { backgroundColor: color, shadowColor: color }]}
+            onPress={() => onConfirm(parseFloat(weight) || 0, parseInt(reps) || 10)}
             activeOpacity={0.85}
           >
             <MaterialIcons name="check-circle" size={24} color={Colors.textInverse} />
-            <Text style={{ fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse }}>
-              {isAr ? 'تأكيد الجلسة' : 'Confirmer la série'}
-            </Text>
+            <Text style={wStyles.confirmText}>{isAr ? 'تأكيد الجلسة' : 'Confirmer la série'}</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={onSkip}
-            style={{ alignItems: 'center', paddingVertical: 14 }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 32, right: 32 }}
-          >
-            <Text style={{ fontSize: FontSize.sm, color: Colors.textMuted }}>{isAr ? 'تخطي بدون وزن' : 'Passer sans peser'}</Text>
+          <TouchableOpacity onPress={onSkip} style={wStyles.skipBtn} hitSlop={{ top: 8, bottom: 8, left: 32, right: 32 }}>
+            <Text style={wStyles.skipText}>{isAr ? 'تخطي بدون وزن' : 'Passer sans peser'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -161,27 +171,152 @@ function WeightInputModal({
   );
 }
 
-// ---- Advanced Timer Component ----
-function AdvancedTimer({
-  exercises,
-  currentExerciseIdx,
-  onExerciseComplete,
-  onFinish,
-  onSetComplete,
-  color,
-  workoutId,
-  userId,
-  isAr,
-}: {
-  exercises: any[];
-  currentExerciseIdx: number;
+const wStyles = StyleSheet.create({
+  panel: { backgroundColor: Colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: Spacing.lg, paddingBottom: 48, borderTopWidth: 2 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.surfaceBorder, alignSelf: 'center', marginBottom: Spacing.md },
+  exName: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center', marginBottom: 4 },
+  setInfo: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, textAlign: 'center', marginBottom: Spacing.lg },
+  adjustRow: { flexDirection: 'row', gap: 16, marginBottom: Spacing.lg },
+  adjustCol: { flex: 1, alignItems: 'center', gap: 10 },
+  adjustLabel: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.bold, letterSpacing: 1 },
+  adjRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  adjBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
+  adjBtnText: { fontSize: 22, color: Colors.textPrimary, fontWeight: FontWeight.bold },
+  adjInput: { backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md, paddingHorizontal: 10, paddingVertical: 8, fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, textAlign: 'center', borderWidth: 2, minWidth: 76 },
+  confirmBtn: { borderRadius: Radius.lg, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexDirection: 'row', gap: 10, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
+  confirmText: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse },
+  skipBtn: { alignItems: 'center', paddingVertical: 14 },
+  skipText: { fontSize: FontSize.sm, color: Colors.textMuted },
+});
+
+// ── Exercise Detail Modal (Photo + Instructions) ───────────────────────────────
+function ExerciseDetailModal({ exercise, color, onClose, isAr }: {
+  exercise: any; color: string; onClose: () => void; isAr: boolean;
+}) {
+  const tips = getExerciseTips(exercise.name);
+  const imgUri = getExerciseImage(exercise.name);
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' }}>
+        <View style={edStyles.panel}>
+          <View style={edStyles.handle} />
+
+          {/* Photo */}
+          <View style={edStyles.imgWrap}>
+            <Image source={{ uri: imgUri }} style={edStyles.img} contentFit="cover" transition={300} />
+            <View style={[edStyles.imgOverlay, { backgroundColor: color + '22' }]} />
+            <View style={edStyles.imgBadge}>
+              <MaterialIcons name="fitness-center" size={12} color={color} />
+              <Text style={[edStyles.imgBadgeText, { color }]}>
+                {exercise.muscleGroup}
+              </Text>
+            </View>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+            <Text style={edStyles.exName}>{exercise.name}</Text>
+            {exercise.technique ? (
+              <View style={[edStyles.infoBox, { backgroundColor: color + '15', borderColor: color + '33' }]}>
+                <MaterialIcons name="tips-and-updates" size={14} color={color} />
+                <Text style={[edStyles.techniqueText, { color: color + 'CC' }]}>{exercise.technique}</Text>
+              </View>
+            ) : null}
+
+            {/* Cues */}
+            <Text style={edStyles.sectionLabel}>{isAr ? '✅ نقاط الأداء' : '✅ Points clés d\'exécution'}</Text>
+            {tips.cues.map((cue, i) => (
+              <View key={i} style={edStyles.cueRow}>
+                <View style={[edStyles.cueDot, { backgroundColor: color }]} />
+                <Text style={edStyles.cueText}>{cue}</Text>
+              </View>
+            ))}
+
+            {/* Mistakes */}
+            <Text style={[edStyles.sectionLabel, { marginTop: Spacing.sm }]}>
+              {isAr ? '⚠️ الأخطاء الشائعة' : '⚠️ Erreurs courantes'}
+            </Text>
+            {tips.common_mistakes.map((m, i) => (
+              <View key={i} style={edStyles.cueRow}>
+                <View style={[edStyles.cueDot, { backgroundColor: Colors.warning }]} />
+                <Text style={[edStyles.cueText, { color: Colors.textSecondary }]}>{m}</Text>
+              </View>
+            ))}
+
+            {/* Breathing */}
+            <View style={edStyles.breathRow}>
+              <MaterialIcons name="air" size={14} color={Colors.primary} />
+              <Text style={edStyles.breathText}>{tips.breathing}</Text>
+            </View>
+
+            {/* Stats */}
+            <View style={edStyles.statsRow}>
+              {[
+                { label: isAr ? 'الجلسات' : 'Séries', val: String(exercise.sets) },
+                { label: isAr ? 'التكرارات' : 'Répétitions', val: exercise.reps },
+                { label: isAr ? 'الراحة' : 'Repos', val: `${exercise.rest}s` },
+                { label: 'Tempo', val: exercise.tempo || '2-0-2' },
+              ].map((s, i) => (
+                <View key={i} style={edStyles.statItem}>
+                  <Text style={[edStyles.statVal, { color }]}>{s.val}</Text>
+                  <Text style={edStyles.statLabel}>{s.label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {exercise.progression ? (
+              <View style={edStyles.progressionBox}>
+                <MaterialIcons name="trending-up" size={13} color={Colors.success} />
+                <Text style={edStyles.progressionText}>{exercise.progression}</Text>
+              </View>
+            ) : null}
+            <View style={{ height: 8 }} />
+          </ScrollView>
+
+          <TouchableOpacity style={edStyles.closeBtn} onPress={onClose} activeOpacity={0.85}>
+            <MaterialIcons name="close" size={18} color={Colors.textInverse} />
+            <Text style={edStyles.closeBtnText}>{isAr ? 'إغلاق' : 'Fermer'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const edStyles = StyleSheet.create({
+  panel: { backgroundColor: Colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: Spacing.md, paddingBottom: 32, borderTopWidth: 1, borderTopColor: Colors.surfaceBorder },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.surfaceBorder, alignSelf: 'center', marginBottom: Spacing.sm },
+  imgWrap: { width: '100%', height: 180, borderRadius: Radius.lg, overflow: 'hidden', marginBottom: Spacing.md, position: 'relative' },
+  img: { width: '100%', height: '100%' },
+  imgOverlay: { position: 'absolute', inset: 0 },
+  imgBadge: { position: 'absolute', bottom: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.glass, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5 },
+  imgBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
+  exName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
+  infoBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: Radius.sm, padding: 10, marginBottom: Spacing.sm, borderWidth: 1 },
+  techniqueText: { flex: 1, fontSize: FontSize.xs, lineHeight: 18, fontStyle: 'italic' },
+  sectionLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 8 },
+  cueRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 },
+  cueDot: { width: 6, height: 6, borderRadius: 3, marginTop: 5, flexShrink: 0 },
+  cueText: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
+  breathRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primaryMuted, borderRadius: Radius.sm, padding: 10, marginTop: Spacing.sm, marginBottom: Spacing.sm },
+  breathText: { flex: 1, fontSize: FontSize.xs, color: Colors.primary, lineHeight: 17 },
+  statsRow: { flexDirection: 'row', gap: 8, marginTop: Spacing.sm },
+  statItem: { flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md, padding: 10, alignItems: 'center', gap: 3 },
+  statVal: { fontSize: FontSize.md, fontWeight: FontWeight.extrabold },
+  statLabel: { fontSize: 10, color: Colors.textMuted },
+  progressionBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.successMuted, borderRadius: Radius.sm, padding: 10, marginTop: Spacing.sm },
+  progressionText: { flex: 1, fontSize: FontSize.xs, color: Colors.success, lineHeight: 17 },
+  closeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.lg, paddingVertical: 14, marginTop: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  closeBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+});
+
+// ── Advanced Timer ────────────────────────────────────────────────────────────
+function AdvancedTimer({ exercises, currentExerciseIdx, onExerciseComplete, onFinish, onSetComplete, color, workoutId, userId, isAr }: {
+  exercises: any[]; currentExerciseIdx: number;
   onExerciseComplete: (idx: number) => void;
   onFinish: (totalTime: number, logs: any[]) => void;
   onSetComplete: (exerciseIdx: number, setIdx: number) => void;
-  color: string;
-  workoutId: string;
-  userId: string | null;
-  isAr: boolean;
+  color: string; workoutId: string; userId: string | null; isAr: boolean;
 }) {
   const [phase, setPhase] = useState<'work' | 'rest' | 'done'>('work');
   const [totalSeconds, setTotalSeconds] = useState(0);
@@ -197,13 +332,11 @@ function AdvancedTimer({
   const totalSets = exercise?.sets || 3;
   const restTime = exercise?.rest || 90;
 
-  // Total elapsed timer
   useEffect(() => {
     totalInterval.current = setInterval(() => setTotalSeconds(s => s + 1), 1000);
     return () => clearInterval(totalInterval.current);
   }, []);
 
-  // Rest countdown
   useEffect(() => {
     if (phase === 'rest') {
       setRestSeconds(restTime);
@@ -222,27 +355,17 @@ function AdvancedTimer({
     }
   }, [phase, restTime]);
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  };
+  const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const volumeKg = allSetLogs.reduce((sum, l) => sum + (l.weight_kg * l.reps), 0);
 
-  const handleSetDone = useCallback(() => {
-    // Show weight input modal before logging the set
-    setShowWeightModal(true);
-  }, []);
+  const handleSetDone = useCallback(() => setShowWeightModal(true), []);
 
   const handleWeightConfirm = async (weight: number, reps: number) => {
     setShowWeightModal(false);
     const log = {
-      workout_id: workoutId,
-      exercise_id: exercise?.id || 'unknown',
-      exercise_name: exercise?.name || '',
-      set_number: currentSet,
-      reps,
-      weight_kg: weight,
-      date: new Date().toISOString().split('T')[0],
+      workout_id: workoutId, exercise_id: exercise?.id || 'unknown',
+      exercise_name: exercise?.name || '', set_number: currentSet,
+      reps, weight_kg: weight, date: new Date().toISOString().split('T')[0],
     };
     const newLogs = [...allSetLogs, log];
     setAllSetLogs(newLogs);
@@ -250,9 +373,7 @@ function AdvancedTimer({
       supabase.from('workout_logs').insert({ user_id: userId, ...log }).catch(console.error);
       addXP(userId, 'complete_workout').catch(console.error);
     }
-    // Track previous weight for this exercise
     setPreviousWeights(prev => ({ ...prev, [exercise?.id]: weight }));
-
     onSetComplete(currentExerciseIdx, currentSet);
     Vibration.vibrate(200);
     if (currentSet >= totalSets) {
@@ -271,13 +392,6 @@ function AdvancedTimer({
     }
   };
 
-  const handleWeightSkip = () => {
-    setShowWeightModal(false);
-    handleWeightConfirm(0, parseInt(exercise?.reps) || 10);
-  };
-
-  const volumeKg = allSetLogs.reduce((sum, l) => sum + (l.weight_kg * l.reps), 0);
-
   if (phase === 'done') {
     return (
       <View style={timerStyles.doneCard}>
@@ -291,7 +405,7 @@ function AdvancedTimer({
           </View>
         )}
         {allSetLogs.length > 0 && (
-          <ScrollView style={{ maxHeight: 200, width: '100%' }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: 180, width: '100%' }} showsVerticalScrollIndicator={false}>
             {allSetLogs.map((l, i) => (
               <View key={i} style={timerStyles.logRow}>
                 <Text style={timerStyles.logEx} numberOfLines={1}>{l.exercise_name}</Text>
@@ -307,20 +421,15 @@ function AdvancedTimer({
   return (
     <View style={[timerStyles.container, { borderColor: color + '44' }]}>
       <WeightInputModal
-        visible={showWeightModal}
-        exerciseName={exercise?.name || ''}
-        setNum={currentSet}
-        previousWeight={previousWeights[exercise?.id] ?? null}
-        onConfirm={handleWeightConfirm}
-        onSkip={handleWeightSkip}
-        color={color}
-        isAr={isAr}
+        visible={showWeightModal} exerciseName={exercise?.name || ''}
+        setNum={currentSet} previousWeight={previousWeights[exercise?.id] ?? null}
+        onConfirm={handleWeightConfirm} onSkip={() => handleWeightConfirm(0, parseInt(exercise?.reps) || 10)}
+        color={color} isAr={isAr}
       />
-      {/* Total elapsed */}
       <View style={timerStyles.totalRow}>
         <MaterialIcons name="timer" size={14} color={Colors.textMuted} />
         <Text style={timerStyles.totalTime}>{formatTime(totalSeconds)}</Text>
-        {volumeKg > 0 && <Text style={timerStyles.volumeInline}>· {volumeKg.toFixed(0)}kg volume</Text>}
+        {volumeKg > 0 && <Text style={timerStyles.volumeInline}>· {volumeKg.toFixed(0)}kg</Text>}
       </View>
 
       {phase === 'rest' ? (
@@ -335,10 +444,9 @@ function AdvancedTimer({
           <TouchableOpacity
             style={timerStyles.skipRestBtn}
             onPress={() => { clearInterval(restInterval.current); setPhase('work'); }}
-            activeOpacity={0.8}
-            hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
+            activeOpacity={0.8} hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
           >
-            <MaterialIcons name="skip-next" size={18} color={Colors.textSecondary} />
+            <MaterialIcons name="skip-next" size={20} color={Colors.textSecondary} />
             <Text style={timerStyles.skipRestText}>{isAr ? 'تخطي الراحة' : 'Passer le repos'}</Text>
           </TouchableOpacity>
         </View>
@@ -348,9 +456,14 @@ function AdvancedTimer({
             <Text style={[timerStyles.phaseLabel, { color }]}>💪 {isAr ? 'جاري التدريب' : 'EN COURS'}</Text>
           </View>
 
+          {/* Exercise photo mini */}
+          <View style={timerStyles.exPhotoWrap}>
+            <Image source={{ uri: getExerciseImage(exercise?.name || '') }} style={timerStyles.exPhoto} contentFit="cover" />
+            <View style={[timerStyles.exPhotoOverlay, { backgroundColor: color + '33' }]} />
+          </View>
+
           <Text style={timerStyles.exerciseName} numberOfLines={2}>{exercise?.name}</Text>
 
-          {/* Set progress dots */}
           <View style={timerStyles.setsRow}>
             {Array.from({ length: totalSets }).map((_, i) => (
               <View
@@ -358,17 +471,14 @@ function AdvancedTimer({
                 style={[
                   timerStyles.setDot,
                   i < currentSet - 1 && { backgroundColor: Colors.success, transform: [{ scale: 1.1 }] },
-                  i === currentSet - 1 && { backgroundColor: color, width: 20, borderRadius: 4 },
+                  i === currentSet - 1 && { backgroundColor: color, width: 22, borderRadius: 5 },
                 ]}
               />
             ))}
           </View>
 
           <Text style={timerStyles.setLabel}>
-            {isAr
-              ? `الجلسة ${currentSet} / ${totalSets}  ·  ${exercise?.reps} تكرار`
-              : `Série ${currentSet} / ${totalSets}  ·  ${exercise?.reps} reps`
-            }
+            {isAr ? `الجلسة ${currentSet} / ${totalSets}  ·  ${exercise?.reps} تكرار` : `Série ${currentSet} / ${totalSets}  ·  ${exercise?.reps} reps`}
           </Text>
 
           {previousWeights[exercise?.id] != null && previousWeights[exercise?.id]! > 0 && (
@@ -380,23 +490,9 @@ function AdvancedTimer({
             </View>
           )}
 
-          {exercise?.technique && (
-            <View style={timerStyles.techniqueBox}>
-              <MaterialIcons name="tips-and-updates" size={12} color={color} />
-              <Text style={[timerStyles.techniqueText, { color: color + 'CC' }]}>{exercise.technique}</Text>
-            </View>
-          )}
-
-          {/* PRIMARY ACTION — large, unmissable */}
-          <TouchableOpacity
-            style={[timerStyles.doneSetBtn, { backgroundColor: color }]}
-            onPress={handleSetDone}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="check-circle" size={26} color={Colors.textInverse} />
-            <Text style={timerStyles.doneSetText}>
-              {isAr ? 'انتهت الجلسة' : 'Série terminée'}
-            </Text>
+          <TouchableOpacity style={[timerStyles.doneSetBtn, { backgroundColor: color }]} onPress={handleSetDone} activeOpacity={0.8}>
+            <MaterialIcons name="check-circle" size={28} color={Colors.textInverse} />
+            <Text style={timerStyles.doneSetText}>{isAr ? 'انتهت الجلسة' : 'Série terminée'}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -405,34 +501,33 @@ function AdvancedTimer({
 }
 
 const timerStyles = StyleSheet.create({
-  container: {
-    backgroundColor: Colors.surfaceElevated, borderRadius: Radius.lg,
-    padding: Spacing.md, marginBottom: 12,
-    borderWidth: 1,
-  },
+  container: { backgroundColor: Colors.surfaceElevated, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 12, borderWidth: 1 },
   totalRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   totalTime: { fontSize: FontSize.xs, color: Colors.textMuted },
-  phasePill: { alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 6, borderRadius: Radius.full, borderWidth: 1, marginBottom: 4 },
-  phaseLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, letterSpacing: 1.5, textAlign: 'center' },
-  restPhase: { alignItems: 'center', gap: 12 },
-  countdownBig: { fontSize: 64, fontWeight: FontWeight.extrabold, letterSpacing: -2 },
+  volumeInline: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.semibold },
+  phasePill: { alignSelf: 'center', paddingHorizontal: 18, paddingVertical: 8, borderRadius: Radius.full, borderWidth: 1, marginBottom: 6 },
+  phaseLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, letterSpacing: 1.2, textAlign: 'center' },
+  restPhase: { alignItems: 'center', gap: 14 },
+  countdownBig: { fontSize: 68, fontWeight: FontWeight.extrabold, letterSpacing: -2 },
   nextLabel: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  skipRestBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: Colors.surfaceBorder, borderRadius: Radius.full, marginTop: 4 },
+  skipRestBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 14, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.full, marginTop: 4, borderWidth: 1, borderColor: Colors.surfaceBorder },
   skipRestText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
-  workPhase: { gap: 12 },
+  workPhase: { gap: 10 },
+  exPhotoWrap: { width: '100%', height: 120, borderRadius: Radius.lg, overflow: 'hidden', position: 'relative' },
+  exPhoto: { width: '100%', height: '100%' },
+  exPhotoOverlay: { position: 'absolute', inset: 0 },
   exerciseName: { fontSize: FontSize.xl, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center', lineHeight: 28 },
   setsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, alignItems: 'center' },
   setDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: Colors.surfaceBorder },
   setLabel: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: 'center', fontWeight: FontWeight.semibold },
-  techniqueBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.surface, borderRadius: Radius.sm, padding: 10 },
-  techniqueText: { flex: 1, fontSize: FontSize.xs, fontStyle: 'italic', lineHeight: 17 },
-  // PRIMARY ACTION BUTTON — large, 64px+ height, unmissable
+  prevWeightRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', backgroundColor: Colors.goldMuted, paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.full },
+  prevWeightText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
   doneSetBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    borderRadius: Radius.lg, paddingVertical: 20, marginTop: 8,
+    borderRadius: Radius.lg, paddingVertical: 22, marginTop: 4,
     shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8,
   },
-  doneSetText: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse, letterSpacing: 0.3 },
+  doneSetText: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textInverse },
   doneCard: { alignItems: 'center', padding: Spacing.xl, gap: 12, width: '100%' },
   doneIcon: { fontSize: 56 },
   doneTitle: { fontSize: FontSize.xxl, fontWeight: FontWeight.extrabold, color: Colors.gold },
@@ -443,11 +538,9 @@ const timerStyles = StyleSheet.create({
   logRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.surfaceBorder, gap: 8 },
   logEx: { flex: 1, fontSize: FontSize.xs, color: Colors.textSecondary },
   logDetail: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.semibold },
-  volumeInline: { fontSize: FontSize.xs, color: Colors.success, fontWeight: FontWeight.semibold },
-  prevWeightRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', backgroundColor: Colors.goldMuted, paddingHorizontal: 12, paddingVertical: 5, borderRadius: Radius.full },
-  prevWeightText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
 });
 
+// ── MAIN SCREEN ───────────────────────────────────────────────────────────────
 export default function TrainingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -455,6 +548,7 @@ export default function TrainingScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const isAr = language === 'ar';
+
   const [selectedDay, setSelectedDay] = useState(0);
   const [activeType, setActiveType] = useState<WorkoutSession['type']>('hypertrophy');
   const [activeSplit, setActiveSplit] = useState<string>('upper_lower');
@@ -464,27 +558,36 @@ export default function TrainingScreen() {
   const [completedSets, setCompletedSets] = useState<Record<string, number[]>>({});
   const [workoutSummary, setWorkoutSummary] = useState<{ totalTime: number; logs: any[]; volumeKg: number } | null>(null);
   const [showSplitPicker, setShowSplitPicker] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<any>(null);
+  const [customExerciseOrder, setCustomExerciseOrder] = useState<any[] | null>(null);
   const [workoutId] = useState(() => `workout_${Date.now()}_${Math.random().toString(36).slice(2)}`);
 
   const session = weeklyWorkout[selectedDay];
+  const displayExercises = customExerciseOrder ?? (session?.exercises || []);
   const dayLabels = t('days').split(',');
   const cfg = session ? TYPE_CONFIG[session.type] || TYPE_CONFIG.recovery : TYPE_CONFIG.recovery;
 
+  // Reset custom order when day/session changes
+  useEffect(() => { setCustomExerciseOrder(null); }, [selectedDay, session?.name]);
+
+  const moveExercise = useCallback((fromIdx: number, direction: 'up' | 'down') => {
+    const toIdx = direction === 'up' ? fromIdx - 1 : fromIdx + 1;
+    if (toIdx < 0 || toIdx >= displayExercises.length) return;
+    const newOrder = [...displayExercises];
+    [newOrder[fromIdx], newOrder[toIdx]] = [newOrder[toIdx], newOrder[fromIdx]];
+    setCustomExerciseOrder(newOrder);
+  }, [displayExercises]);
+
   const handleExerciseComplete = (idx: number) => {
-    if (session?.exercises[idx]) {
-      setCompletedExercises(prev => new Set([...prev, session.exercises[idx].id]));
-      if (idx < session.exercises.length - 1) {
-        setCurrentExerciseIdx(idx + 1);
-      }
+    if (displayExercises[idx]) {
+      setCompletedExercises(prev => new Set([...prev, displayExercises[idx].id]));
+      if (idx < displayExercises.length - 1) setCurrentExerciseIdx(idx + 1);
     }
   };
 
   const handleSetComplete = (exerciseIdx: number, setIdx: number) => {
-    const exId = session?.exercises[exerciseIdx]?.id || '';
-    setCompletedSets(prev => ({
-      ...prev,
-      [exId]: [...(prev[exId] || []), setIdx],
-    }));
+    const exId = displayExercises[exerciseIdx]?.id || '';
+    setCompletedSets(prev => ({ ...prev, [exId]: [...(prev[exId] || []), setIdx] }));
   };
 
   const handleFinish = (totalTime: number, logs: any[]) => {
@@ -502,97 +605,113 @@ export default function TrainingScreen() {
     setWorkoutRunning(true);
   }, []);
 
-  const handleGenerateWithSplit = useCallback(() => {
-    regenerateWorkout(activeType, activeSplit);
-    setShowSplitPicker(false);
-  }, [activeType, activeSplit, regenerateWorkout]);
-
-  const totalVolume = session?.exercises.reduce((sum, e) => sum + (e.sets * (parseInt(e.reps) || 8)), 0) || 0;
-  const completionPct = session?.exercises.length
-    ? (completedExercises.size / session.exercises.length) * 100 : 0;
-
-  const scienceTip = session
-    ? (language === 'ar' && session.scienceTipAr ? session.scienceTipAr : session.scienceTip) : '';
+  const completionPct = displayExercises.length
+    ? (completedExercises.size / displayExercises.length) * 100 : 0;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
 
+      {/* Exercise Detail Modal */}
+      {selectedExercise && (
+        <ExerciseDetailModal
+          exercise={selectedExercise}
+          color={cfg.color}
+          onClose={() => setSelectedExercise(null)}
+          isAr={isAr}
+        />
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('training_plan')}</Text>
         <TouchableOpacity style={styles.splitPickerBtn} onPress={() => setShowSplitPicker(p => !p)} activeOpacity={0.8}>
-          <MaterialIcons name="tune" size={16} color={Colors.textSecondary} />
-          <Text style={styles.splitPickerText}>{SPLIT_TYPES.find(s => s.key === activeSplit)?.label || 'Split'}</Text>
+          <MaterialIcons name="tune" size={16} color={Colors.primary} />
+          <Text style={styles.splitPickerBtnText}>{SPLIT_TYPES.find(s => s.key === activeSplit)?.label || 'Split'}</Text>
+          <MaterialIcons name={showSplitPicker ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={16} color={Colors.textMuted} />
         </TouchableOpacity>
       </View>
 
-      {/* Split Picker */}
+      {/* ── Split Picker Panel ── */}
       {showSplitPicker && (
-        <View style={styles.splitPickerPanel}>
-          <Text style={styles.splitPickerTitle}>Programme d'entraînement</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.splitScrollRow}>
+        <View style={styles.splitPanel}>
+          <Text style={styles.splitPanelTitle}>{isAr ? 'اختر البرنامج' : 'Choisissez votre programme'}</Text>
+          <View style={styles.splitGrid}>
             {SPLIT_TYPES.map(sp => (
               <TouchableOpacity
                 key={sp.key}
-                style={[styles.splitChip, activeSplit === sp.key && styles.splitChipActive]}
+                style={[styles.splitCard, activeSplit === sp.key && styles.splitCardActive]}
                 onPress={() => setActiveSplit(sp.key)}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name={sp.icon as any} size={14} color={activeSplit === sp.key ? Colors.textInverse : Colors.textMuted} />
-                <Text style={[styles.splitChipText, activeSplit === sp.key && styles.splitChipTextActive]}>{sp.label}</Text>
+                <View style={[styles.splitCardIcon, activeSplit === sp.key && { backgroundColor: Colors.primary + '22' }]}>
+                  <MaterialIcons name={sp.icon as any} size={20} color={activeSplit === sp.key ? Colors.primary : Colors.textMuted} />
+                </View>
+                <Text style={[styles.splitCardLabel, activeSplit === sp.key && styles.splitCardLabelActive]}>{sp.label}</Text>
+                <Text style={styles.splitCardDesc}>{sp.desc}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
-          <TouchableOpacity style={styles.generateSplitBtn} onPress={handleGenerateWithSplit} disabled={isWorkoutLoading}>
+          </View>
+          <TouchableOpacity
+            style={[styles.generateBtn, isWorkoutLoading && { opacity: 0.6 }]}
+            onPress={() => { regenerateWorkout(activeType, activeSplit); setShowSplitPicker(false); }}
+            disabled={isWorkoutLoading} activeOpacity={0.85}
+          >
             {isWorkoutLoading
               ? <ActivityIndicator size="small" color={Colors.textInverse} />
-              : <MaterialIcons name="auto-awesome" size={16} color={Colors.textInverse} />
+              : <MaterialIcons name="auto-awesome" size={18} color={Colors.textInverse} />
             }
-            <Text style={styles.generateSplitText}>
-              {isWorkoutLoading ? 'Génération...' : `Générer ${SPLIT_TYPES.find(s => s.key === activeSplit)?.label}`}
+            <Text style={styles.generateBtnText}>
+              {isWorkoutLoading ? 'Génération IA...' : `Générer ${SPLIT_TYPES.find(s => s.key === activeSplit)?.label}`}
             </Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Workout Type Filters */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeFilters}>
-        {WORKOUT_TYPES.map(tf => {
-          const tc = TYPE_CONFIG[tf.key];
-          return (
-            <TouchableOpacity
-              key={tf.key}
-              style={[styles.typeChip, activeType === tf.key && { backgroundColor: tc.color, borderColor: tc.color }]}
-              onPress={() => setActiveType(tf.key)}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name={tc.icon as any} size={14} color={activeType === tf.key ? Colors.textInverse : Colors.textMuted} />
-              <Text style={[styles.typeChipText, activeType === tf.key && styles.typeChipTextActive]}>{tf.labelFr}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {/* ── Workout Type Filters — LARGE, readable ── */}
+      <View style={styles.typeFiltersWrap}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeFilters}>
+          {Object.entries(TYPE_CONFIG).filter(([k]) => k !== 'recovery').map(([key, cfg]) => {
+            const isActive = activeType === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.typeChip, isActive && { backgroundColor: cfg.color, borderColor: cfg.color }]}
+                onPress={() => setActiveType(key as WorkoutSession['type'])}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name={cfg.icon as any} size={18} color={isActive ? Colors.textInverse : cfg.color} />
+                <View>
+                  <Text style={[styles.typeChipLabel, isActive && styles.typeChipLabelActive]}>{cfg.label}</Text>
+                  <Text style={[styles.typeChipDesc, isActive && { color: Colors.textInverse + 'AA' }]}>{cfg.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {isWorkoutLoading && (
         <View style={styles.aiLoadingBanner}>
           <ActivityIndicator size="small" color={Colors.primary} />
-          <Text style={styles.aiLoadingText}>IA génère votre plan {SPLIT_TYPES.find(s => s.key === activeSplit)?.label} personnalisé...</Text>
+          <Text style={styles.aiLoadingText}>IA génère votre programme {SPLIT_TYPES.find(s => s.key === activeSplit)?.label}...</Text>
         </View>
       )}
 
-      {/* Day Selector */}
+      {/* ── Day Selector ── */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayBarInner} style={styles.dayBar}>
         {weeklyWorkout.map((s, i) => {
           const sc = TYPE_CONFIG[s.type] || TYPE_CONFIG.recovery;
+          const isActive = selectedDay === i;
           return (
             <TouchableOpacity
               key={i}
-              style={[styles.dayChip, selectedDay === i && { backgroundColor: sc.color, borderColor: sc.color }]}
+              style={[styles.dayChip, isActive && { backgroundColor: sc.color, borderColor: sc.color }]}
               onPress={() => { setSelectedDay(i); setWorkoutRunning(false); setWorkoutSummary(null); setCompletedExercises(new Set()); }}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.dayChipDay, selectedDay === i && styles.dayChipDayActive]}>{dayLabels[i]}</Text>
-              <MaterialIcons name={sc.icon as any} size={12} color={selectedDay === i ? Colors.textInverse : Colors.textMuted} />
+              <Text style={[styles.dayChipDay, isActive && styles.dayChipDayActive]}>{dayLabels[i]}</Text>
+              <MaterialIcons name={sc.icon as any} size={12} color={isActive ? Colors.textInverse : Colors.textMuted} />
             </TouchableOpacity>
           );
         })}
@@ -617,28 +736,16 @@ export default function TrainingScreen() {
                     </View>
                     <View style={styles.sessionMetaItem}>
                       <MaterialIcons name="repeat" size={14} color={Colors.textMuted} />
-                      <Text style={styles.sessionMetaText}>{session.exercises.length} ex.</Text>
-                    </View>
-                    <View style={styles.sessionMetaItem}>
-                      <MaterialIcons name="trending-up" size={14} color={Colors.textMuted} />
-                      <Text style={styles.sessionMetaText}>{totalVolume} reps</Text>
+                      <Text style={styles.sessionMetaText}>{displayExercises.length} ex.</Text>
                     </View>
                   </View>
                 </View>
               </View>
 
-              {/* Warmup tip */}
-              {(session as any).warmup && (
-                <View style={styles.warmupBox}>
-                  <MaterialIcons name="whatshot" size={12} color={Colors.gold} />
-                  <Text style={styles.warmupText}>Échauffement: {(session as any).warmup}</Text>
-                </View>
-              )}
-
-              {/* Progress bar */}
-              {session.exercises.length > 0 && (
+              {/* Progress */}
+              {displayExercises.length > 0 && (
                 <View style={styles.progressWrap}>
-                  <Text style={styles.progressLabel}>{completedExercises.size}/{session.exercises.length} exercices</Text>
+                  <Text style={styles.progressLabel}>{completedExercises.size}/{displayExercises.length} exercices</Text>
                   <View style={styles.progressBarBg}>
                     <View style={[styles.progressBarFill, { width: `${completionPct}%`, backgroundColor: cfg.color }]} />
                   </View>
@@ -647,21 +754,15 @@ export default function TrainingScreen() {
 
               {/* Science Tip */}
               <View style={styles.scienceBox}>
-                <View style={styles.scienceHeader}>
-                  <MaterialIcons name="science" size={14} color={cfg.color} />
-                  <Text style={[styles.scienceLabel, { color: cfg.color }]}>{t('science_tip')}</Text>
-                </View>
-                <Text style={styles.scienceTip}>{scienceTip}</Text>
+                <MaterialIcons name="science" size={14} color={cfg.color} />
+                <Text style={[styles.scienceTip, { color: cfg.color + 'CC' }]}>
+                  {language === 'ar' && session.scienceTipAr ? session.scienceTipAr : session.scienceTip}
+                </Text>
               </View>
 
-              {/* Start/Stop Button */}
               {!workoutRunning && !workoutSummary && (
-                <TouchableOpacity
-                  style={[styles.startBtn, { backgroundColor: cfg.color, shadowColor: cfg.color }]}
-                  onPress={startWorkout}
-                  activeOpacity={0.85}
-                >
-                  <MaterialIcons name="play-circle-filled" size={24} color={Colors.textInverse} />
+                <TouchableOpacity style={[styles.startBtn, { backgroundColor: cfg.color, shadowColor: cfg.color }]} onPress={startWorkout} activeOpacity={0.85}>
+                  <MaterialIcons name="play-circle-filled" size={26} color={Colors.textInverse} />
                   <Text style={styles.startBtnText}>{t('start_workout')}</Text>
                 </TouchableOpacity>
               )}
@@ -670,23 +771,23 @@ export default function TrainingScreen() {
             {/* Workout Summary */}
             {workoutSummary && (
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>🏆 {isAr ? 'انتهت الجلسة!' : 'Séance terminée !'}</Text>
+                <Text style={styles.summaryTitle}>🏆 {isAr ? 'انتهت!' : 'Séance terminée !'}</Text>
                 <Text style={styles.summaryDetail}>
-                  {completedExercises.size}/{session.exercises.length} {isAr ? 'تمرين' : 'exercices'} · {Math.floor(workoutSummary.totalTime / 60)}:{String(workoutSummary.totalTime % 60).padStart(2, '0')} min
+                  {completedExercises.size}/{displayExercises.length} ex. · {Math.floor(workoutSummary.totalTime / 60)}:{String(workoutSummary.totalTime % 60).padStart(2, '0')} min
                 </Text>
                 {workoutSummary.volumeKg > 0 && (
-                  <Text style={styles.summaryVolume}>{isAr ? 'الحجم الكلي' : 'Volume'}: {workoutSummary.volumeKg.toFixed(0)} kg</Text>
+                  <Text style={styles.summaryVolume}>Volume: {workoutSummary.volumeKg.toFixed(0)} kg</Text>
                 )}
                 <TouchableOpacity style={styles.newSessionBtn} onPress={startWorkout} activeOpacity={0.8}>
-                  <Text style={styles.newSessionText}>{isAr ? 'إعادة التدريب' : 'Recommencer'}</Text>
+                  <Text style={styles.newSessionText}>{isAr ? 'إعادة' : 'Recommencer'}</Text>
                 </TouchableOpacity>
               </View>
             )}
 
             {/* Advanced Timer */}
-            {workoutRunning && session.exercises.length > 0 && (
+            {workoutRunning && displayExercises.length > 0 && (
               <AdvancedTimer
-                exercises={session.exercises}
+                exercises={displayExercises}
                 currentExerciseIdx={currentExerciseIdx}
                 onExerciseComplete={handleExerciseComplete}
                 onFinish={handleFinish}
@@ -698,69 +799,88 @@ export default function TrainingScreen() {
               />
             )}
 
-            {/* Exercise List */}
-            {session.exercises.length > 0 ? (
+            {/* Exercise List with Reorder + Photo */}
+            {displayExercises.length > 0 && (
               <>
-                <Text style={styles.sectionTitle}>Programme ({session.exercises.length} exercices)</Text>
-                {session.exercises.map((ex, i) => {
+                <View style={styles.exerciseListHeader}>
+                  <Text style={styles.sectionTitle}>Programme ({displayExercises.length} exercices)</Text>
+                  {!workoutRunning && (
+                    <View style={styles.reorderHint}>
+                      <MaterialIcons name="swap-vert" size={14} color={Colors.textMuted} />
+                      <Text style={styles.reorderHintText}>{isAr ? 'إعادة الترتيب' : 'Réorganiser'}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {displayExercises.map((ex, i) => {
                   const isActive = workoutRunning && i === currentExerciseIdx;
                   const done = completedExercises.has(ex.id);
                   const setsCompleted = completedSets[ex.id]?.length || 0;
                   const intensityColors: Record<string, string> = { high: Colors.danger, medium: Colors.warning, low: Colors.success };
                   const ic = intensityColors[ex.intensity] || Colors.success;
+                  const imgUri = getExerciseImage(ex.name);
+
                   return (
                     <View
-                      key={ex.id}
+                      key={`${ex.id}-${i}`}
                       style={[
                         styles.exCard,
                         done && styles.exCardDone,
                         isActive && { borderColor: cfg.color, borderWidth: 2 },
                       ]}
                     >
-                      <View style={[styles.exNumber, done && { backgroundColor: Colors.success }, isActive && { backgroundColor: cfg.color }]}>
-                        {done
-                          ? <MaterialIcons name="check" size={16} color={Colors.textInverse} />
-                          : isActive
-                            ? <MaterialIcons name="play-arrow" size={16} color={Colors.textInverse} />
-                            : <Text style={styles.exNumberText}>{i + 1}</Text>
-                        }
-                      </View>
-                      <View style={styles.exInfo}>
-                        <Text style={[styles.exName, done && styles.exNameDone]}>
-                          {language === 'ar' && ex.nameAr ? ex.nameAr : ex.name}
-                        </Text>
-                        <Text style={styles.exMuscle}>{ex.muscleGroup}</Text>
-                        {(ex as any).muscleGroupSecondary && (
-                          <Text style={styles.exMuscleSecondary}>+ {(ex as any).muscleGroupSecondary}</Text>
-                        )}
-                        {ex.technique && <Text style={styles.exTechnique}>{ex.technique}</Text>}
-                        <View style={styles.exStats}>
-                          <View style={styles.exStat}>
-                            <Text style={styles.exStatLabel}>{t('sets')}</Text>
-                            <Text style={styles.exStatValue}>{ex.sets}</Text>
+                      {/* Exercise Photo */}
+                      <TouchableOpacity onPress={() => setSelectedExercise(ex)} activeOpacity={0.85}>
+                        <View style={styles.exPhotoWrap}>
+                          <Image source={{ uri: imgUri }} style={styles.exPhoto} contentFit="cover" transition={200} />
+                          <View style={[styles.exPhotoOverlay, { backgroundColor: isActive ? cfg.color + '44' : 'rgba(8,15,30,0.4)' }]} />
+                          <View style={styles.exPhotoInfoIcon}>
+                            <MaterialIcons name="info" size={16} color="#fff" />
                           </View>
-                          <View style={styles.exStat}>
-                            <Text style={styles.exStatLabel}>{t('reps')}</Text>
-                            <Text style={styles.exStatValue}>{ex.reps}</Text>
-                          </View>
-                          <View style={styles.exStat}>
-                            <Text style={styles.exStatLabel}>{t('rest')}</Text>
-                            <Text style={styles.exStatValue}>{ex.rest}s</Text>
-                          </View>
-                          {(ex as any).tempo && (
-                            <View style={styles.exStat}>
-                              <Text style={styles.exStatLabel}>Tempo</Text>
-                              <Text style={styles.exStatValue}>{(ex as any).tempo}</Text>
-                            </View>
-                          )}
-                          {(ex as any).rir !== undefined && (
-                            <View style={styles.exStat}>
-                              <Text style={styles.exStatLabel}>RIR</Text>
-                              <Text style={styles.exStatValue}>{(ex as any).rir}</Text>
+                          {done && (
+                            <View style={styles.exPhotoDone}>
+                              <MaterialIcons name="check-circle" size={24} color={Colors.success} />
                             </View>
                           )}
                         </View>
-                        {/* Mini set progress */}
+                      </TouchableOpacity>
+
+                      <View style={styles.exBody}>
+                        <View style={styles.exTopRow}>
+                          <View style={styles.exNumber}>
+                            {done
+                              ? <MaterialIcons name="check" size={14} color={Colors.success} />
+                              : isActive
+                                ? <MaterialIcons name="play-arrow" size={14} color={cfg.color} />
+                                : <Text style={[styles.exNumberText, { color: cfg.color }]}>{i + 1}</Text>
+                            }
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.exName, done && styles.exNameDone]}>
+                              {language === 'ar' && ex.nameAr ? ex.nameAr : ex.name}
+                            </Text>
+                            <Text style={styles.exMuscle}>{ex.muscleGroup}</Text>
+                          </View>
+                          <View style={[styles.intensityBadge, { backgroundColor: ic + '22' }]}>
+                            <Text style={{ fontSize: 12 }}>{ex.intensity === 'high' ? '🔥' : ex.intensity === 'medium' ? '⚡' : '✓'}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.exStats}>
+                          {[
+                            { label: isAr ? 'جلسات' : 'Séries', val: String(ex.sets) },
+                            { label: isAr ? 'تكرار' : 'Reps', val: ex.reps },
+                            { label: isAr ? 'راحة' : 'Repos', val: `${ex.rest}s` },
+                            ...(ex.tempo ? [{ label: 'Tempo', val: ex.tempo }] : []),
+                            ...(ex.rir !== undefined ? [{ label: 'RIR', val: String(ex.rir) }] : []),
+                          ].map((s, idx) => (
+                            <View key={idx} style={styles.exStatItem}>
+                              <Text style={styles.exStatVal}>{s.val}</Text>
+                              <Text style={styles.exStatLabel}>{s.label}</Text>
+                            </View>
+                          ))}
+                        </View>
+
                         {workoutRunning && isActive && (
                           <View style={styles.miniSetsRow}>
                             {Array.from({ length: ex.sets }).map((_, si) => (
@@ -768,24 +888,47 @@ export default function TrainingScreen() {
                             ))}
                           </View>
                         )}
-                        {(ex as any).progression && (
-                          <Text style={styles.progressionText}>📈 {(ex as any).progression}</Text>
+
+                        {/* Reorder buttons */}
+                        {!workoutRunning && (
+                          <View style={styles.reorderBtns}>
+                            <TouchableOpacity
+                              style={[styles.reorderBtn, i === 0 && styles.reorderBtnDisabled]}
+                              onPress={() => moveExercise(i, 'up')}
+                              disabled={i === 0}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <MaterialIcons name="keyboard-arrow-up" size={18} color={i === 0 ? Colors.textMuted : Colors.textSecondary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.reorderBtn, i === displayExercises.length - 1 && styles.reorderBtnDisabled]}
+                              onPress={() => moveExercise(i, 'down')}
+                              disabled={i === displayExercises.length - 1}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <MaterialIcons name="keyboard-arrow-down" size={18} color={i === displayExercises.length - 1 ? Colors.textMuted : Colors.textSecondary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.infoBtn}
+                              onPress={() => setSelectedExercise(ex)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <MaterialIcons name="info-outline" size={18} color={cfg.color} />
+                            </TouchableOpacity>
+                          </View>
                         )}
-                      </View>
-                      <View style={[styles.intensityBadge, { backgroundColor: ic + '22' }]}>
-                        <Text style={[styles.intensityText, { color: ic }]}>
-                          {ex.intensity === 'high' ? '🔥' : ex.intensity === 'medium' ? '⚡' : '✓'}
-                        </Text>
                       </View>
                     </View>
                   );
                 })}
               </>
-            ) : (
+            )}
+
+            {displayExercises.length === 0 && (
               <View style={styles.restDay}>
                 <Text style={styles.restIcon}>😴</Text>
                 <Text style={styles.restTitle}>Jour de Repos</Text>
-                <Text style={styles.restSub}>{scienceTip}</Text>
+                <Text style={styles.restSub}>{session.scienceTip}</Text>
               </View>
             )}
           </>
@@ -798,36 +941,55 @@ export default function TrainingScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
+
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
   title: { fontSize: FontSize.xxl, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  splitPickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  splitPickerText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
+  splitPickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.primary + '44' },
+  splitPickerBtnText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.semibold },
 
-  splitPickerPanel: { marginHorizontal: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  splitPickerTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 12 },
-  splitScrollRow: { gap: 8, paddingBottom: 12 },
-  splitChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  splitChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  splitChipText: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: FontWeight.medium },
-  splitChipTextActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
-  generateSplitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.primary, borderRadius: Radius.lg, paddingVertical: 15, marginTop: 8, ...Shadow.primary },
-  generateSplitText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
+  // Split panel
+  splitPanel: { marginHorizontal: Spacing.md, backgroundColor: Colors.surface, borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
+  splitPanelTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
+  splitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.sm },
+  splitCard: { width: (width - 48 - 16) / 2 - 4, backgroundColor: Colors.surfaceElevated, borderRadius: Radius.lg, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.surfaceBorder, gap: 4 },
+  splitCardActive: { borderColor: Colors.primary, borderWidth: 2, backgroundColor: Colors.primaryMuted },
+  splitCardIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceBorder, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  splitCardLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary },
+  splitCardLabelActive: { color: Colors.primary },
+  splitCardDesc: { fontSize: FontSize.micro, color: Colors.textMuted, lineHeight: 13 },
+  generateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Colors.primary, borderRadius: Radius.lg, paddingVertical: 16,
+    ...Shadow.primary,
+  },
+  generateBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
-  typeFilters: { paddingHorizontal: Spacing.md, gap: 8, paddingBottom: Spacing.sm },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
-  typeChipText: { fontSize: FontSize.xs, fontWeight: FontWeight.medium, color: Colors.textMuted },
-  typeChipTextActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
+  // ── Type Filters — LARGE & READABLE ──
+  typeFiltersWrap: { marginBottom: Spacing.sm },
+  typeFilters: { paddingHorizontal: Spacing.md, gap: 10, paddingVertical: 2 },
+  typeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: Colors.surfaceBorder,
+    minHeight: 58,
+    ...Shadow.sm,
+  },
+  typeChipLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary },
+  typeChipLabelActive: { color: Colors.textInverse },
+  typeChipDesc: { fontSize: FontSize.micro, color: Colors.textMuted, marginTop: 1 },
 
   aiLoadingBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: Spacing.md, marginBottom: Spacing.sm, backgroundColor: Colors.primaryMuted, borderRadius: Radius.md, padding: 12 },
-  aiLoadingText: { flex: 1, fontSize: FontSize.xs, color: Colors.primary, lineHeight: 18 },
+  aiLoadingText: { flex: 1, fontSize: FontSize.xs, color: Colors.primary },
 
   dayBar: { marginBottom: Spacing.md },
   dayBarInner: { paddingHorizontal: Spacing.md, gap: 8 },
-  dayChip: { alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
+  dayChip: { alignItems: 'center', gap: 3, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.surfaceBorder },
   dayChipDay: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: FontWeight.medium },
   dayChipDayActive: { color: Colors.textInverse, fontWeight: FontWeight.bold },
 
   scroll: { paddingHorizontal: Spacing.md },
+
   sessionCard: { borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, ...Shadow.sm },
   sessionTop: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.sm },
   sessionIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
@@ -838,25 +1000,21 @@ const styles = StyleSheet.create({
   sessionMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sessionMetaText: { fontSize: FontSize.xs, color: Colors.textMuted },
 
-  warmupBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.goldMuted, borderRadius: Radius.sm, padding: 8, marginBottom: Spacing.sm },
-  warmupText: { flex: 1, fontSize: FontSize.xs, color: Colors.gold, lineHeight: 16 },
-
-  progressWrap: { marginBottom: 12 },
+  progressWrap: { marginBottom: Spacing.sm },
   progressLabel: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: 6 },
   progressBarBg: { height: 6, backgroundColor: Colors.surfaceBorder, borderRadius: 3, overflow: 'hidden' },
   progressBarFill: { height: '100%', borderRadius: 3 },
 
-  scienceBox: { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: Radius.sm, padding: Spacing.sm, marginBottom: Spacing.md },
-  scienceHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  scienceLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
-  scienceTip: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 18 },
+  scienceBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: Radius.sm, padding: Spacing.sm, marginBottom: Spacing.md },
+  scienceTip: { flex: 1, fontSize: FontSize.xs, lineHeight: 18 },
 
   startBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    borderRadius: Radius.xl, paddingVertical: 18,
+    borderRadius: Radius.xl, paddingVertical: 20,
     shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
   },
-  startBtnText: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textInverse },
+  startBtnText: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textInverse },
+
   summaryCard: { backgroundColor: Colors.goldMuted, borderRadius: Radius.xl, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.gold + '33', alignItems: 'center', gap: 8, ...Shadow.sm },
   summaryTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.gold },
   summaryDetail: { fontSize: FontSize.sm, color: Colors.textSecondary },
@@ -864,26 +1022,44 @@ const styles = StyleSheet.create({
   newSessionBtn: { backgroundColor: Colors.gold, borderRadius: Radius.lg, paddingHorizontal: 28, paddingVertical: 14, ...Shadow.gold },
   newSessionText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textInverse },
 
-  sectionTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: Spacing.sm },
-  exCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 8, borderWidth: 1, borderColor: Colors.surfaceBorder, ...Shadow.sm },
+  exerciseListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.sm },
+  sectionTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  reorderHint: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  reorderHintText: { fontSize: FontSize.xs, color: Colors.textMuted },
+
+  // Exercise Card — horizontal with photo thumbnail
+  exCard: {
+    flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    marginBottom: 10, borderWidth: 1, borderColor: Colors.surfaceBorder, overflow: 'hidden', ...Shadow.sm,
+  },
   exCardDone: { borderColor: Colors.success + '66', backgroundColor: Colors.successMuted },
-  exNumber: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  exNumberText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textSecondary },
-  exInfo: { flex: 1 },
-  exName: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
+  exPhotoWrap: { width: 90, height: 110, position: 'relative' },
+  exPhoto: { width: 90, height: 110 },
+  exPhotoOverlay: { position: 'absolute', inset: 0 },
+  exPhotoInfoIcon: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  exPhotoDone: { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
+
+  exBody: { flex: 1, padding: Spacing.sm, gap: 6 },
+  exTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  exNumber: { width: 26, height: 26, borderRadius: 13, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  exNumberText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold },
+  exName: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, lineHeight: 18 },
   exNameDone: { textDecorationLine: 'line-through', color: Colors.textMuted },
-  exMuscle: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 2 },
-  exMuscleSecondary: { fontSize: 10, color: Colors.textMuted, marginBottom: 2 },
-  exTechnique: { fontSize: 10, color: Colors.primary, fontStyle: 'italic', marginBottom: 4, lineHeight: 14 },
-  exStats: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 4 },
-  exStat: { alignItems: 'center' },
-  exStatLabel: { fontSize: 9, color: Colors.textMuted },
-  exStatValue: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  miniSetsRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
-  miniSetDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.surfaceBorder },
-  progressionText: { fontSize: 10, color: Colors.success, marginTop: 4 },
-  intensityBadge: { borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 4, alignSelf: 'flex-start' },
-  intensityText: { fontSize: 14 },
+  exMuscle: { fontSize: FontSize.micro, color: Colors.textMuted, marginTop: 1 },
+  intensityBadge: { borderRadius: Radius.xs, paddingHorizontal: 6, paddingVertical: 3, alignSelf: 'flex-start' },
+
+  exStats: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  exStatItem: { alignItems: 'center', backgroundColor: Colors.surfaceElevated, borderRadius: Radius.xs, paddingHorizontal: 8, paddingVertical: 4 },
+  exStatVal: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  exStatLabel: { fontSize: FontSize.micro, color: Colors.textMuted },
+
+  miniSetsRow: { flexDirection: 'row', gap: 5 },
+  miniSetDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.surfaceBorder },
+
+  reorderBtns: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  reorderBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.surfaceBorder },
+  reorderBtnDisabled: { opacity: 0.3 },
+  infoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.primaryMuted, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.primary + '33', marginLeft: 4 },
 
   restDay: { alignItems: 'center', paddingVertical: 48 },
   restIcon: { fontSize: 48, marginBottom: 16 },
