@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AlertProvider } from '@/template';
+import { AlertProvider } from '@/template/ui';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { HealthProvider } from '@/contexts/HealthContext';

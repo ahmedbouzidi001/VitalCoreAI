@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Linking } from 'react-native';
-import { getSupabaseClient } from '@/template';
-import { supabase } from '@/services/supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { supabase } from '@/services/supabase';
 import { setAnalyticsUser, trackLogin, trackSignUp, trackLogout, trackSubscriptionChecked } from '@/services/analytics';
 import { cacheGet, cacheSet, cacheDelete, CacheKeys } from '@/services/offlineCache';
 
@@ -49,15 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [operationLoading, setOperationLoading] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionState>(DEFAULT_SUBSCRIPTION);
-  const supabaseClient = getSupabaseClient();
 
   // ── Deep Link Handler for Stripe redirect ────────────────────────────────
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
-      const { url } = event;
-      if (url.includes('subscription/success')) {
-        // Re-check subscription after successful checkout
-        setTimeout(() => checkSubscription(), 2000);
+      if (event.url.includes('subscription/success')) {
+        setTimeout(() => triggerSubscriptionRefresh(), 2000);
       }
     };
     const sub = Linking.addEventListener('url', handleDeepLink);
@@ -66,9 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Auth State ────────────────────────────────────────────────────────────
   useEffect(() => {
-    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        const u = {
+        const u: AuthUser = {
           id: session.user.id,
           email: session.user.email || '',
           username: session.user.user_metadata?.username,
@@ -76,14 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(u);
         setAnalyticsUser(u.id);
         loadCachedSubscription(u.id);
-        checkSubscriptionAfterDelay(u.id);
+        setTimeout(() => doCheckSubscription(null, u.id), 1500);
       }
       setLoading(false);
     });
 
-    const { data: { subscription: authSub } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const u = {
+        const u: AuthUser = {
           id: session.user.id,
           email: session.user.email || '',
           username: session.user.user_metadata?.username,
@@ -105,22 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (cached) setSubscription(cached);
   };
 
-  const checkSubscriptionAfterDelay = (userId: string) => {
-    setTimeout(() => checkSubscriptionForUser(userId), 1500);
-  };
-
-  const checkSubscriptionForUser = useCallback(async (userId?: string) => {
-    const uid = userId || user?.id;
-    if (!uid) return;
-
-    // Don't re-check more than once per 5 minutes
-    if (subscription.lastChecked && Date.now() - subscription.lastChecked < 5 * 60 * 1000) return;
+  // Internal subscription check — avoids stale closure issues by accepting userId directly
+  const doCheckSubscription = async (lastChecked: number | null, userId: string) => {
+    if (!userId) return;
+    if (lastChecked && Date.now() - lastChecked < 5 * 60 * 1000) return;
 
     setSubscription(prev => ({ ...prev, isLoading: true }));
-
     try {
       const { data, error } = await supabase.functions.invoke('check-subscription', {});
-
       if (error) {
         let errMsg = error.message;
         if (error instanceof FunctionsHttpError) {
@@ -138,28 +126,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
         lastChecked: Date.now(),
       };
-
       setSubscription(newSub);
       trackSubscriptionChecked(newSub.subscribed, newSub.tier);
-
-      // Cache for 5 minutes
-      if (uid) await cacheSet(CacheKeys.subscription(uid), newSub, 300);
-    } catch (err) {
+      await cacheSet(CacheKeys.subscription(userId), newSub, 300);
+    } catch {
       setSubscription(prev => ({ ...prev, isLoading: false }));
     }
-  }, [user?.id, subscription.lastChecked]);
+  };
+
+  const triggerSubscriptionRefresh = () => {
+    setSubscription(prev => {
+      doCheckSubscription(null, prev.lastChecked ? '' : '');
+      return { ...prev, lastChecked: null };
+    });
+  };
 
   const checkSubscription = useCallback(async () => {
-    setSubscription(prev => ({ ...prev, lastChecked: null })); // Force refresh
-    await checkSubscriptionForUser();
-  }, [checkSubscriptionForUser]);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
+    await doCheckSubscription(null, session.user.id);
+  }, []);
 
   const startCheckout = useCallback(async (plan: 'premium' | 'pro'): Promise<{ error: string | null }> => {
     try {
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: { plan },
-      });
-
+      const { data, error } = await supabase.functions.invoke('create-checkout', { body: { plan } });
       if (error) {
         let errMsg = error.message;
         if (error instanceof FunctionsHttpError) {
@@ -167,16 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return { error: errMsg };
       }
-
       if (data?.already_subscribed) {
         return { error: 'Vous avez déjà un abonnement actif. Gérez-le via "Mon abonnement".' };
       }
-
       if (data?.url) {
         await Linking.openURL(data.url);
         return { error: null };
       }
-
       return { error: 'Impossible de créer la session de paiement' };
     } catch (err: any) {
       return { error: err.message || 'Erreur inattendue' };
@@ -186,7 +173,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const openCustomerPortal = useCallback(async (): Promise<{ error: string | null }> => {
     try {
       const { data, error } = await supabase.functions.invoke('customer-portal', {});
-
       if (error) {
         let errMsg = error.message;
         if (error instanceof FunctionsHttpError) {
@@ -194,32 +180,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return { error: errMsg };
       }
-
       if (data?.url) {
         await Linking.openURL(data.url);
         return { error: null };
       }
-
-      return { error: 'Impossible d\'ouvrir le portail client' };
+      return { error: "Impossible d'ouvrir le portail client" };
     } catch (err: any) {
       return { error: err.message || 'Erreur inattendue' };
     }
   }, []);
 
-  const isPremium = useCallback(() => {
+  const isPremium = useCallback((): boolean => {
     return subscription.subscribed && (subscription.tier === 'premium' || subscription.tier === 'pro');
   }, [subscription]);
 
   const signUpWithPassword = async (email: string, password: string, metadata?: any) => {
     setOperationLoading(true);
     try {
-      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: metadata } });
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: metadata } });
       if (error) return { error: error.message, user: null };
       const u = data.user ? { id: data.user.id, email: data.user.email || '', username: metadata?.username } : null;
-      if (u) {
-        setAnalyticsUser(u.id);
-        trackSignUp();
-      }
+      if (u) { setAnalyticsUser(u.id); trackSignUp(); }
       return { error: null, user: u };
     } finally {
       setOperationLoading(false);
@@ -229,13 +210,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithPassword = async (email: string, password: string) => {
     setOperationLoading(true);
     try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return { error: error.message, user: null };
       const u = data.user ? { id: data.user.id, email: data.user.email || '' } : null;
       if (u) {
         setAnalyticsUser(u.id);
         trackLogin('password');
-        checkSubscriptionAfterDelay(u.id);
+        setTimeout(() => doCheckSubscription(null, u.id), 1500);
       }
       return { error: null, user: u };
     } finally {
@@ -249,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       trackLogout();
       setAnalyticsUser(null);
       if (user) await cacheDelete(CacheKeys.subscription(user.id));
-      const { error } = await supabaseClient.auth.signOut();
+      const { error } = await supabase.auth.signOut();
       setSubscription(DEFAULT_SUBSCRIPTION);
       return { error: error?.message || null };
     } finally {

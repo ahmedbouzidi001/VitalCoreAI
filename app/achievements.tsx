@@ -19,7 +19,7 @@ import {
   enableAllNotifications, cancelAllNotifications,
   requestNotificationPermissions,
 } from '@/services/notifications';
-import { useAlert } from '@/template';
+import { useAlert } from '@/template/ui';
 
 export default function GamificationScreen() {
   const insets = useSafeAreaInsets();

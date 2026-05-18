@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { useHealth } from '@/hooks/useHealth';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAlert } from '@/template';
+import { useAlert } from '@/template/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import { Language } from '@/constants/i18n';
 import { enableAllNotifications, cancelAllNotifications } from '@/services/notifications';

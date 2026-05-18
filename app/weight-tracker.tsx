@@ -12,7 +12,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useHealth } from '@/hooks/useHealth';
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import { saveWeightEntry, loadWeightHistory } from '@/services/vitalCore';
-import { useAlert } from '@/template';
+import { useAlert } from '@/template/ui';
 import { addXP } from '@/services/gamification';
 
 const { width } = Dimensions.get('window');

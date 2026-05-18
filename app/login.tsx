@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAlert } from '@/template';
+import { useAlert } from '@/template/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 
 type Mode = 'login' | 'signup';

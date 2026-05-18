@@ -10,7 +10,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAlert } from '@/template';
+import { useAlert } from '@/template/ui';
 import { Colors, Spacing, Radius, FontSize, FontWeight, Shadow } from '@/constants/theme';
 import { trackPremiumViewed, trackCheckoutStarted, trackManageSubscription } from '@/services/analytics';
 

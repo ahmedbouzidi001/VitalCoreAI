@@ -19,7 +19,7 @@ import {
   saveFoodLog, loadTodayFoodLogs, deleteFoodLog,
 } from '@/services/foodLogger';
 import { addXP } from '@/services/gamification';
-import { useAlert } from '@/template';
+import { useAlert } from '@/template/ui';
 
 const MEAL_TYPES: Array<{ key: FoodLog['meal_type']; labelFr: string; labelAr: string; icon: string; color: string }> = [
   { key: 'breakfast', labelFr: 'Petit-déjeuner', labelAr: 'إفطار', icon: 'wb-sunny', color: Colors.gold },
