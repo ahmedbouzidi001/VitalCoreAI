@@ -47,8 +47,6 @@ export const Colors = {
   overlayLight: 'rgba(8,15,30,0.55)',
   glass: 'rgba(15,26,46,0.92)',
 
-  // === MISSING (referenced in components) ===
-  warningMuted: 'rgba(255, 152, 0, 0.10)',
   warningStrong: 'rgba(255, 152, 0, 0.22)',
 };
 
